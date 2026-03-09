@@ -16,6 +16,7 @@ google-auth==2.49.0
 google-cloud-aiplatform==1.140.0
 google-cloud-bigquery==3.40.1
 google-cloud-core==2.5.0
+google-cloud-firestore==2.24.0
 google-cloud-resource-manager==1.16.0
 google-cloud-storage==3.9.0
 google-crc32c==1.8.0
