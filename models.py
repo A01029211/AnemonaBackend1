@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, TIMESTAMP, Text
+from sqlalchemy import Boolean, Column, Integer, String, TIMESTAMP, Text
 from sqlalchemy.sql import func
 from database import Base
 
@@ -23,4 +23,19 @@ class Proyecto(Base):
     exclusiones = Column(Text)
     restricciones = Column(Text)
     anexos = Column(Text)
+
+
+class Usuario(Base):
+    __tablename__ = 'usuario'
+
+    idusuario = Column(Integer, primary_key=True, index=True)
+    nombre = Column(String(50))
+    apellidopaterno = Column(String(50))
+    apellidomaterno = Column(String(50))
+    correo = Column(String(150))
+    password = Column(String(255))
+    ultimoacceso = Column(TIMESTAMP)
+    activo = Column(Boolean)
+    iddepartamento = Column(Integer)
+    idrol = Column(Integer)
 

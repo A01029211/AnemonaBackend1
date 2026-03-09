@@ -11,8 +11,11 @@ pwd_context = CryptContext(schemes=["bcrypt"])
 def hashear_password(password: str) -> str:
     return pwd_context.hash(password)
 
-def verificar_password(password_plano: str, password_hasheado: str) -> bool:
-    return pwd_context.verify(password_plano, password_hasheado)
+def verificar_password(password_plano: str, password_guardado: str) -> bool:
+    if password_guardado.startswith("$2b$") or password_guardado.startswith("$2a$"):
+        return pwd_context.verify(password_plano, password_guardado)
+    else:
+        return password_plano == password_guardado
 
 def crear_token(email: str) -> str:
     datos = {
