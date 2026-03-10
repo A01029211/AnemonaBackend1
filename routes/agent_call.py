@@ -7,7 +7,7 @@ from fastapi import APIRouter, HTTPException, Depends
 # Configuration
 PROJECT_ID = "sage-groove-461014-c1"
 LOCATION = "us-central1"
-RESOURCE_ID = "5754429343895912448"
+RESOURCE_ID = "4278128275420610560"
 AGENT_RESOURCE_NAME = f"projects/{PROJECT_ID}/locations/{LOCATION}/reasoningEngines/{RESOURCE_ID}"
 
 # Initialize Vertex AI
