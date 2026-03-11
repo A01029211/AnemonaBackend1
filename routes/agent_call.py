@@ -5,9 +5,10 @@ from vertexai import agent_engines
 from fastapi import APIRouter, HTTPException, Depends
 
 # Configuration
-PROJECT_ID = "sage-groove-461014-c1"
+PROJECT_ID = "anemona-2130e"
 LOCATION = "us-central1"
-RESOURCE_ID = "4278128275420610560"
+RESOURCE_ID = "7350454034496487424"
+               
 AGENT_RESOURCE_NAME = f"projects/{PROJECT_ID}/locations/{LOCATION}/reasoningEngines/{RESOURCE_ID}"
 
 # Initialize Vertex AI
