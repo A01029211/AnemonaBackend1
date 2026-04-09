@@ -5,6 +5,8 @@ from models import Proyecto
 from models import Mensaje
 from models import SessionChat
 from models import Usuario
+from models import Departamento
+
 
 
 router = APIRouter()
@@ -46,3 +48,9 @@ def usuarios_sesion(session_id: str, db: Session = Depends(get_db)):
     ).all()
 
     return usuarios
+
+# ver los departamentos existentes
+@router.get("/departamentos")
+def obtener_departamentos(db: Session = Depends(get_db)):
+    departamentos = db.query(Departamento).all()
+    return departamentos
