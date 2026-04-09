@@ -1,29 +1,29 @@
+from typing import Optional
 from sqlalchemy import Boolean, Column, Integer, String, TIMESTAMP, Text
 from sqlalchemy import Column, Boolean, Integer, String, TIMESTAMP, Text, ForeignKey
 from sqlalchemy.sql import func
 from database import Base
 
-
 class Proyecto(Base):
     __tablename__ = "proyecto"
-
+  
     folio = Column(Integer, primary_key=True, index=True)
-    fechaCreacion = Column(TIMESTAMP, server_default=func.now())
-    nombreProyecto = Column(String(200))
-    fechaActualizacion = Column(TIMESTAMP)
-    tipoIniciativa = Column(String(100))
-    CR = Column(Integer)
-    patrocinador = Column(String(150))
-    socioNegocio = Column(String(150))
-    descripcionGeneral = Column(Text)
-    objetivoIniciativa = Column(Text)
-    requerimientosNegocio = Column(Text)
-    beneficios = Column(Text)
-    participacionAreas = Column(Text)
-    supuestos = Column(Text)
-    exclusiones = Column(Text)
-    restricciones = Column(Text)
-    anexos = Column(Text)
+    fechaCreacion = Column("fechacreacion", TIMESTAMP, server_default=func.now())
+    nombreProyecto = Column("nombreproyecto", String(200))
+    fechaActualizacion = Column("fechaactualizacion", TIMESTAMP)
+    tipoIniciativa = Column("tipoiniciativa", String(100))
+    CR = Column("cr", Integer)
+    patrocinador = Column("patrocinador", String(150))
+    socioNegocio = Column("socionegocio", String(150))
+    descripcionGeneral = Column("descripciongeneral", Text)
+    objetivoIniciativa = Column("objetivoiniciativa", Text)
+    requerimientosNegocio = Column("requerimientosnegocio", Text)
+    beneficios = Column("beneficios", Text)
+    participacionAreas = Column("participacionareas", Text)
+    supuestos = Column("supuestos", Text)
+    exclusiones = Column("exclusiones", Text)
+    restricciones = Column("restricciones", Text)
+    anexos = Column("anexos", Text)
 
 
 class Usuario(Base):

@@ -1,3 +1,5 @@
+import asyncio
+from datetime import datetime
 from fastapi import APIRouter, HTTPException
 from google.cloud import firestore
 from pydantic import BaseModel
@@ -7,9 +9,14 @@ from google.oauth2 import service_account
 from typing import List, Optional, Dict, Any
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
+from requests import Session
 import vertexai
 from vertexai import agent_engines
 from fastapi import APIRouter, HTTPException, Depends
+
+from database import get_db
+from models import Proyecto, SessionChat
+
 load_dotenv()
 
 FIRESTORE_PROJECT = os.getenv("FIRESTORE_PROJECT")
@@ -25,21 +32,24 @@ _db = firestore.Client(
     credentials=credentials
 )
 
-# Configuration
 PROJECT_ID = "anemona-2130e"
 LOCATION = "us-central1"
 RESOURCE_ID = "4527541493065318400"
-               
+
 AGENT_RESOURCE_NAME = f"projects/{PROJECT_ID}/locations/{LOCATION}/reasoningEngines/{RESOURCE_ID}"
 
-# Initialize Vertex AI
+# Initialize Vertex AI — una sola vez
 vertexai.init(project=PROJECT_ID, location=LOCATION)
+
+# Instancia del agente — una sola vez al arrancar
+remote_app = agent_engines.get(AGENT_RESOURCE_NAME)
+
 router = APIRouter(prefix="/firestore", tags=["firestore"])
 
 
 class DocumentoPayload(BaseModel):
     data: dict
-# Store sessions in memory (for production, use a database)
+
 sessions = {}
 
 
@@ -55,6 +65,7 @@ class Formulario(BaseModel):
     tipo_iniciativa: Optional[str] = None
     usuario_nombre: Optional[str] = None
     usuario_id: Optional[str] = None
+    session_id: Optional[str] = None
 
 
 class NuevoProyectoPayload(BaseModel):
@@ -82,14 +93,13 @@ async def bajar_documento():
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-    
-    
-@router.post("/new_project")
-async def new_project(payload: NuevoProyectoPayload):
-    try:
-        #1. pLANTILLA BASE
-        documento = payload.plantilla.copy()
 
+
+@router.post("/new_project")
+async def new_project(payload: NuevoProyectoPayload, db: Session = Depends(get_db)):
+    try:
+        # 1. Plantilla base
+        documento = payload.plantilla.copy()
         formulario = payload.formulario
         mapeo = {
             "solicitante":          "SOLICITANTE",
@@ -101,13 +111,11 @@ async def new_project(payload: NuevoProyectoPayload):
             "nombre_iniciativa":    "NOMBRE_INICIATIVA",
             "tipo_iniciativa":      "TIPO_INICIATIVA",
         }
-
         datos_generales = documento.get("DATOS_GENERALES", {})
         for campo_modelo, campo_plantilla in mapeo.items():
             valor = getattr(formulario, campo_modelo, None)
             if valor is not None:
                 datos_generales[campo_plantilla] = valor
-
         documento["DATOS_GENERALES"] = datos_generales
 
         if formulario.departamentos_impactados:
@@ -116,30 +124,67 @@ async def new_project(payload: NuevoProyectoPayload):
                 for area in formulario.departamentos_impactados
             ]
 
-        #eSCRITura en Firestore
-        _, doc_ref = _db.collection(COLLECTION).add(documento)
-        project_id = doc_ref.id
+        # 2. Firestore y Vertex AI corren en paralelo
+        async def crear_firestore():
+            _, doc_ref = _db.collection(COLLECTION).add(documento)
+            return doc_ref.id
 
-        # Vertex ai session
-        remote_app = agent_engines.get(AGENT_RESOURCE_NAME)
-        remote_session = await remote_app.async_create_session(
-            user_id=formulario.usuario_id
+        async def crear_vertex_session():
+            remote_session = await remote_app.async_create_session(
+                user_id=formulario.usuario_id
+            )
+            return remote_session["id"]
+
+        project_id, session_id = await asyncio.gather(
+            crear_firestore(),
+            crear_vertex_session()
         )
-        session_id = remote_session["id"]
 
-        # Guardaar sesión
+        # 3. Guardar sesión en memoria
         sessions[session_id] = {
             "user_id":    formulario.usuario_id,
             "session_id": session_id,
-            "project_id": project_id        # vinculamos proyecto con sesión
+            "project_id": project_id
         }
 
+        # 4. Insertar en SQL en un thread separado para no bloquear
+        def insertar_en_sql():
+            nuevo_proyecto = Proyecto(
+                fechaCreacion=datetime.now(),
+                fechaActualizacion=datetime.now(),
+                nombreProyecto=formulario.nombre_iniciativa,
+                tipoIniciativa=formulario.tipo_iniciativa,
+                CR=int(formulario.cr) if formulario.cr and formulario.cr.isdigit() else None,
+                patrocinador=formulario.patrocinador,
+                socioNegocio=formulario.nombre_socio_negocio,
+                descripcionGeneral=formulario.info_contacto,
+                participacionAreas=", ".join(formulario.departamentos_impactados)
+                                   if formulario.departamentos_impactados else None,
+            )
+            db.add(nuevo_proyecto)
+            db.flush()
+
+            nueva_session = SessionChat(
+                session_id=session_id,
+                folio=nuevo_proyecto.folio,
+                idusuario=formulario.usuario_id if formulario.usuario_id else None,
+                fecha_inicio=datetime.now(),
+                fecha_conclusion=None
+            )
+            db.add(nueva_session)
+            db.commit()
+            db.refresh(nuevo_proyecto)
+            return nuevo_proyecto.folio
+
+        folio = await asyncio.to_thread(insertar_en_sql)
+
         return {
-            "ok":        True,
+            "ok":         True,
             "project_id": project_id,
             "session_id": session_id,
-            "mensaje":   f"Proyecto '{project_id}' y sesión '{session_id}' creados"
+            "mensaje":    f"Proyecto '{project_id}' y sesión '{session_id}' creados"
         }
 
     except Exception as e:
+        await asyncio.to_thread(db.rollback)
         raise HTTPException(status_code=500, detail=str(e))
