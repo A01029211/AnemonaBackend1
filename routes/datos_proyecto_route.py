@@ -2,7 +2,7 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from database import get_db
-from models import Proyecto, Mensaje, SessionChat, Usuario
+from models import Departamento, Proyecto, Mensaje, SessionChat, Usuario
 from pydantic import BaseModel
 from typing import Optional, List
 
@@ -47,3 +47,9 @@ def usuarios_sesion(session_id: str, db: Session = Depends(get_db)):
     ).all()
 
     return usuarios
+
+# ver los departamentos existentes
+@router.get("/departamentos")
+def obtener_departamentos(db: Session = Depends(get_db)):
+    departamentos = db.query(Departamento).all()
+    return departamentos
