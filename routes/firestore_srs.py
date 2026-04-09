@@ -87,7 +87,7 @@ async def bajar_documento():
 @router.post("/new_project")
 async def new_project(payload: NuevoProyectoPayload):
     try:
-        # ── 1. Partir de la plantilla como base ──────────────────────────
+        #1. pLANTILLA BASE
         documento = payload.plantilla.copy()
 
         formulario = payload.formulario
@@ -116,18 +116,18 @@ async def new_project(payload: NuevoProyectoPayload):
                 for area in formulario.departamentos_impactados
             ]
 
-        # ── 3. Insertar en Firestore ──────────────────────────────────────
+        #eSCRITura en Firestore
         _, doc_ref = _db.collection(COLLECTION).add(documento)
         project_id = doc_ref.id
 
-        # ── 4. Crear sesión en Vertex AI Agent Engine ─────────────────────
+        # Vertex ai session
         remote_app = agent_engines.get(AGENT_RESOURCE_NAME)
         remote_session = await remote_app.async_create_session(
             user_id=formulario.usuario_id
         )
         session_id = remote_session["id"]
 
-        # ── 5. Guardar sesión en memoria ──────────────────────────────────
+        # Guardaar sesión
         sessions[session_id] = {
             "user_id":    formulario.usuario_id,
             "session_id": session_id,
