@@ -32,14 +32,12 @@ def obtener_mis_proyectos(idusuario: str, db: Session = Depends(get_db)):
     nombre_depto = depto.nombre if depto else "Sin área"
 
     proyectos = (
-        db.query(Proyecto)
-        .filter(Proyecto.folio.in_(
-            db.query(empleados_proyecto.folio)
-            .filter(empleados_proyecto.idusuario == idusuario)
-        ))
-        .order_by(Proyecto.fechacreacion.desc())
-        .all()
-    )
+    db.query(Proyecto)
+    .join(SessionChat, Proyecto.folio == SessionChat.folio)
+    .filter(SessionChat.idusuario == idusuario)
+    .order_by(Proyecto.fechacreacion.desc())
+    .all()
+)
 
     return [
         {
