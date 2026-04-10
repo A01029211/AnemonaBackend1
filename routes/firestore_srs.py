@@ -159,7 +159,7 @@ async def new_project(payload: NuevoProyectoPayload, db: Session = Depends(get_d
                 socionegocio=formulario.nombre_socio_negocio,
                 descripciongeneral=formulario.info_contacto,
                 participacionareas=", ".join(formulario.departamentos_impactados)
-                                   if formulario.departamentos_impactados else None,
+                if formulario.departamentos_impactados else None,
             )
             db.add(nuevo_proyecto)
             db.flush()

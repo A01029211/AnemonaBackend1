@@ -75,9 +75,7 @@ async def create_session(request: CreateSessionRequest):
 async def query_agent(request: QueryRequest):
     """ENPOINT PARA ENVIAR MENSAJES AL AGENTE, SE DEBE DE MANDAR LA SESIÓN PARA HACER REFERENCIA A LA MISMA"""
     try:
-        # Verify session exists
-        if request.session_id not in sessions:
-            raise HTTPException(status_code=404, detail="Session not found")
+        
         
         remote_app = agent_engines.get(AGENT_RESOURCE_NAME)
         
