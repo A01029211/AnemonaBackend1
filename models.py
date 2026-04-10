@@ -8,18 +8,18 @@ class Proyecto(Base):
     __tablename__ = "proyecto"
 
     folio = Column(Integer, primary_key=True, index=True)
-    fechaCreacion = Column(TIMESTAMP, server_default=func.now())
-    nombreProyecto = Column(String(200))
-    fechaActualizacion = Column(TIMESTAMP)
-    tipoIniciativa = Column(String(100))
-    CR = Column(Integer)
+    fechacreacion = Column(TIMESTAMP, server_default=func.now())
+    nombreproyecto = Column(String(200))
+    fechaactualizacion = Column(TIMESTAMP)
+    tipoiniciativa = Column(String(100))
+    cr = Column(Integer)
     patrocinador = Column(String(150))
-    socioNegocio = Column(String(150))
-    descripcionGeneral = Column(Text)
-    objetivoIniciativa = Column(Text)
-    requerimientosNegocio = Column(Text)
+    socionegocio = Column(String(150))
+    descripciongeneral = Column(Text)
+    objetivoiniciativa = Column(Text)
+    requerimientosnegocio = Column(Text)
     beneficios = Column(Text)
-    participacionAreas = Column(Text)
+    participacionareas = Column(Text)
     supuestos = Column(Text)
     exclusiones = Column(Text)
     restricciones = Column(Text)
@@ -29,7 +29,7 @@ class Proyecto(Base):
 class Usuario(Base):
     __tablename__ = 'usuario'
 
-    idusuario = Column(Integer, primary_key=True, index=True)
+    idusuario = Column(Text, primary_key=True, index=True)
     nombre = Column(String(50))
     apellidopaterno = Column(String(50))
     apellidomaterno = Column(String(50))
@@ -57,13 +57,11 @@ class Rol(Base):
 
 
 
-class EmpleadosProyecto(Base):
+class empleados_proyecto(Base):
     __tablename__ = "empleados_proyecto"
 
     folio = Column(Integer, ForeignKey("proyecto.folio"), primary_key=True)
-    idusuario = Column(Integer, ForeignKey("usuario.idusuario"), primary_key=True)
-
-
+    idusuario = Column(Text, ForeignKey("usuario.idusuario"), primary_key=True)
 
 
 class Mensaje(Base):
@@ -82,6 +80,6 @@ class SessionChat(Base):
     id_session = Column(Integer, primary_key=True, index=True)
     session_id = Column(String(70))
     folio = Column(Integer, ForeignKey("proyecto.folio"))
-    idusuario = Column(Integer, ForeignKey("usuario.idusuario"))
+    idusuario = Column(Text, ForeignKey("usuario.idusuario"))
     fecha_inicio = Column(TIMESTAMP, server_default=func.now())
     fecha_conclusion = Column(TIMESTAMP)
