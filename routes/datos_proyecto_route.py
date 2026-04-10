@@ -1,10 +1,11 @@
 from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from database import get_db
-from models import Departamento, Proyecto, Mensaje, SessionChat, Usuario
+from models import Departamento, Proyecto, Mensaje, SessionChat, Usuario, empleados_proyecto
 from pydantic import BaseModel
 from typing import Optional, List
+
 
 from routes.firestore_srs import Formulario
 
@@ -15,6 +16,40 @@ router = APIRouter()
 def obtener_proyectos(db: Session = Depends(get_db)):
     proyectos = db.query(Proyecto).all()
     return proyectos
+
+@router.get("/usuarios/{idusuario}/proyectos")
+def obtener_mis_proyectos(idusuario: str, db: Session = Depends(get_db)):
+
+    usuario = db.query(Usuario).filter(Usuario.idusuario == idusuario).first()
+    if not usuario:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+
+    depto = (
+        db.query(Departamento)
+        .filter(Departamento.iddepartamento == usuario.iddepartamento)
+        .first()
+    )
+    nombre_depto = depto.nombre if depto else "Sin área"
+
+    proyectos = (
+        db.query(Proyecto)
+        .filter(Proyecto.folio.in_(
+            db.query(empleados_proyecto.folio)
+            .filter(empleados_proyecto.idusuario == idusuario)
+        ))
+        .order_by(Proyecto.fechacreacion.desc())
+        .all()
+    )
+
+    return [
+        {
+            "folio": p.folio,
+            "nombreproyecto": p.nombreproyecto,
+            "fechacreacion": p.fechacreacion.isoformat() if p.fechacreacion else None,
+            "departamento": nombre_depto,
+        }
+        for p in proyectos
+    ]
 
 # obtener mensajes
 @router.get("/mensajes")
