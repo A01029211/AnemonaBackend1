@@ -150,15 +150,15 @@ async def new_project(payload: NuevoProyectoPayload, db: Session = Depends(get_d
         # 4. Insertar en SQL en un thread separado para no bloquear
         def insertar_en_sql():
             nuevo_proyecto = Proyecto(
-                fechaCreacion=datetime.now(),
-                fechaActualizacion=datetime.now(),
-                nombreProyecto=formulario.nombre_iniciativa,
-                tipoIniciativa=formulario.tipo_iniciativa,
-                CR=int(formulario.cr) if formulario.cr and formulario.cr.isdigit() else None,
+                fechacreacion=datetime.now(),
+                fechaactualizacion=datetime.now(),
+                nombreproyecto=formulario.nombre_iniciativa,
+                tipoiniciativa=formulario.tipo_iniciativa,
+                cr=int(formulario.cr) if formulario.cr and formulario.cr.isdigit() else None,
                 patrocinador=formulario.patrocinador,
-                socioNegocio=formulario.nombre_socio_negocio,
-                descripcionGeneral=formulario.info_contacto,
-                participacionAreas=", ".join(formulario.departamentos_impactados)
+                socionegocio=formulario.nombre_socio_negocio,
+                descripciongeneral=formulario.info_contacto,
+                participacionareas=", ".join(formulario.departamentos_impactados)
                                    if formulario.departamentos_impactados else None,
             )
             db.add(nuevo_proyecto)
