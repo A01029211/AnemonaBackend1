@@ -78,8 +78,10 @@ class SessionChat(Base):
     __tablename__ = "session_chat"
 
     id_session = Column(Integer, primary_key=True, index=True)
+    
     session_id = Column(String(70))
     folio = Column(Integer, ForeignKey("proyecto.folio"))
     idusuario = Column(Text, ForeignKey("usuario.idusuario"))
     fecha_inicio = Column(TIMESTAMP, server_default=func.now())
+    id_firestore_document = Column(String(50))
     fecha_conclusion = Column(TIMESTAMP)

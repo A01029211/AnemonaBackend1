@@ -83,9 +83,9 @@ async def subir_documento(payload: DocumentoPayload):
 
 
 @router.get("/bajar")
-async def bajar_documento():
+async def bajar_documento(doc_id: str):
     try:
-        doc = _db.collection(COLLECTION).document(DOC_ID).get()
+        doc = _db.collection(COLLECTION).document(doc_id).get()
         if not doc.exists:
             raise HTTPException(status_code=404, detail="Documento no encontrado")
         return {"ok": True, "data": doc.to_dict()}
@@ -169,7 +169,8 @@ async def new_project(payload: NuevoProyectoPayload, db: Session = Depends(get_d
                 folio=nuevo_proyecto.folio,
                 idusuario=formulario.usuario_id if formulario.usuario_id else None,
                 fecha_inicio=datetime.now(),
-                fecha_conclusion=None
+                fecha_conclusion=None,
+                id_firestore_document=project_id,
             )
             db.add(nueva_session)
             db.commit()
