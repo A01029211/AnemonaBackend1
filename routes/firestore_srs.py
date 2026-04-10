@@ -83,9 +83,9 @@ async def subir_documento(payload: DocumentoPayload):
 
 
 @router.get("/bajar")
-async def bajar_documento():
+async def bajar_documento(doc_id: str):
     try:
-        doc = _db.collection(COLLECTION).document(DOC_ID).get()
+        doc = _db.collection(COLLECTION).document(doc_id).get()
         if not doc.exists:
             raise HTTPException(status_code=404, detail="Documento no encontrado")
         return {"ok": True, "data": doc.to_dict()}
