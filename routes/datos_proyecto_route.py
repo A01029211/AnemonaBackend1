@@ -154,3 +154,42 @@ def obtener_proyectos_recientes(idusuario: str, db: Session = Depends(get_db)):
         for proyecto, session in resultados
     ]
 
+
+
+
+#Eliminar proyecto según su folio
+@router.delete("/proyectos/{folio}")
+def eliminar_proyecto(folio: int, db: Session = Depends(get_db)):
+    proyecto = db.query(Proyecto).filter(Proyecto.folio == folio).first()
+
+    if not proyecto:
+        raise HTTPException(status_code=404, detail="Proyecto no encontrado")
+
+    try:
+        #Buscar la sesión asociada al proyecto
+        sesion = db.query(SessionChat).filter(SessionChat.folio == folio).first()
+
+        #Si existe sesión, borrar primero sus mensajes y luego la sesión
+        if sesion:
+            db.query(Mensaje).filter(Mensaje.id_session == sesion.id_session).delete()
+            db.query(SessionChat).filter(SessionChat.folio == folio).delete()
+
+        #Borrar relaciones del proyecto con usuarios
+        db.query(empleados_proyecto).filter(empleados_proyecto.folio == folio).delete()
+
+        #Borrar el proyecto
+        db.query(Proyecto).filter(Proyecto.folio == folio).delete()
+
+        db.commit()
+
+        return {
+            "ok": True,
+            "message": "Proyecto eliminado correctamente"
+        }
+
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=f"No se pudo eliminar el proyecto: {str(e)}"
+        )
