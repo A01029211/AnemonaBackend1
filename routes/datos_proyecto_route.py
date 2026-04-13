@@ -19,7 +19,6 @@ def obtener_proyectos(db: Session = Depends(get_db)):
 
 @router.get("/usuarios/{idusuario}/proyectos")
 def obtener_mis_proyectos(idusuario: str, db: Session = Depends(get_db)):
-
     usuario = db.query(Usuario).filter(Usuario.idusuario == idusuario).first()
     if not usuario:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
@@ -31,22 +30,24 @@ def obtener_mis_proyectos(idusuario: str, db: Session = Depends(get_db)):
     )
     nombre_depto = depto.nombre if depto else "Sin área"
 
-    proyectos = (
-    db.query(Proyecto)
-    .join(SessionChat, Proyecto.folio == SessionChat.folio)
-    .filter(SessionChat.idusuario == idusuario)
-    .order_by(Proyecto.fechacreacion.desc())
-    .all()
-)
+    resultados = (
+        db.query(Proyecto, SessionChat)
+        .join(SessionChat, Proyecto.folio == SessionChat.folio)
+        .filter(SessionChat.idusuario == idusuario)
+        .order_by(Proyecto.fechacreacion.desc())
+        .all()
+    )
 
     return [
         {
-            "folio": p.folio,
-            "nombreproyecto": p.nombreproyecto,
-            "fechacreacion": p.fechacreacion.isoformat() if p.fechacreacion else None,
+            "folio": proyecto.folio,
+            "nombreproyecto": proyecto.nombreproyecto,
+            "fechacreacion": proyecto.fechacreacion.isoformat() if proyecto.fechacreacion else None,
             "departamento": nombre_depto,
+            "session_id": session.session_id,
+            "id_firestore_document": session.id_firestore_document,
         }
-        for p in proyectos
+        for proyecto, session in resultados
     ]
 
 # obtener mensajes
