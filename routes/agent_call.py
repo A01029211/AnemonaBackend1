@@ -7,7 +7,7 @@ from fastapi import APIRouter, HTTPException, Depends
 # Configuration
 PROJECT_ID = "anemona-2130e"
 LOCATION = "us-central1"
-RESOURCE_ID = "4527541493065318400"
+RESOURCE_ID = "3887213958595084288"
                
 AGENT_RESOURCE_NAME = f"projects/{PROJECT_ID}/locations/{LOCATION}/reasoningEngines/{RESOURCE_ID}"
 

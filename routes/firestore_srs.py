@@ -34,7 +34,7 @@ _db = firestore.Client(
 
 PROJECT_ID = "anemona-2130e"
 LOCATION = "us-central1"
-RESOURCE_ID = "4527541493065318400"
+RESOURCE_ID = "3887213958595084288"
 
 AGENT_RESOURCE_NAME = f"projects/{PROJECT_ID}/locations/{LOCATION}/reasoningEngines/{RESOURCE_ID}"
 
@@ -129,22 +129,22 @@ async def new_project(payload: NuevoProyectoPayload, db: Session = Depends(get_d
             _, doc_ref = _db.collection(COLLECTION).add(documento)
             return doc_ref.id
 
-        async def crear_vertex_session():
+        async def crear_vertex_session(id_firestore_document):
             remote_session = await remote_app.async_create_session(
-                user_id=formulario.usuario_id
+                user_id=formulario.usuario_id,
+                state={"doc_id":id_firestore_document}  # 👈 aquí
             )
             return remote_session["id"]
 
-        project_id, session_id = await asyncio.gather(
-            crear_firestore(),
-            crear_vertex_session()
-        )
+
+        firestore_id= await crear_firestore()
+        session_id=  await crear_vertex_session(firestore_id)
 
         # 3. Guardar sesión en memoria
         sessions[session_id] = {
             "user_id":    formulario.usuario_id,
             "session_id": session_id,
-            "project_id": project_id
+            "project_id": firestore_id
         }
 
         # 4. Insertar en SQL en un thread separado para no bloquear
@@ -170,7 +170,7 @@ async def new_project(payload: NuevoProyectoPayload, db: Session = Depends(get_d
                 idusuario=formulario.usuario_id if formulario.usuario_id else None,
                 fecha_inicio=datetime.now(),
                 fecha_conclusion=None,
-                id_firestore_document=project_id,
+                id_firestore_document=firestore_id,
             )
             db.add(nueva_session)
             db.commit()
@@ -181,9 +181,9 @@ async def new_project(payload: NuevoProyectoPayload, db: Session = Depends(get_d
 
         return {
             "ok":         True,
-            "project_id": project_id,
+            "project_id": firestore_id,
             "session_id": session_id,
-            "mensaje":    f"Proyecto '{project_id}' y sesión '{session_id}' creados"
+            "mensaje":    f"Documento Firestore '{firestore_id}' y sesión '{session_id}' creados"
         }
 
     except Exception as e:
