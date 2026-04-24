@@ -117,7 +117,28 @@ async def obtener_arquitectura(doc_id: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@router.post("/generar-arquitectura")
+async def generar_arquitectura(session_id: str):
+    try:
+        if not session_id:
+            raise HTTPException(status_code=400, detail="session_id requerido")
 
+        # Ejecuta el agente remoto de Vertex
+        response = await remote_app.async_run(
+            session_id=session_id,
+            input="crea los nodos para el diagrama de arquitectura"
+        )
+
+        return {
+            "ok": True,
+            "mensaje": "Agente ejecutado correctamente",
+            "response": response
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    
+    
 @router.post("/new_project")
 async def new_project(payload: NuevoProyectoPayload, db: Session = Depends(get_db)):
     try:
