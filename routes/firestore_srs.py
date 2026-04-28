@@ -95,6 +95,52 @@ async def bajar_documento(doc_id: str):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+# Endpoint específico para obtener nodos y aristas para la arquitectura
+@router.get("/arquitectura")
+async def obtener_arquitectura(doc_id: str):
+    try:
+        doc = _db.collection(COLLECTION).document(doc_id).get()
+
+        if not doc.exists:
+            raise HTTPException(status_code=404, detail="Documento no encontrado")
+
+        data = doc.to_dict() or {}
+
+        return {
+            "ok": True,
+            "doc_id": doc_id,
+            "nodes": data.get("NODOS", []),
+            "edges": data.get("ARISTAS", [])
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/generar-arquitectura")
+async def generar_arquitectura(session_id: str):
+    try:
+        if not session_id:
+            raise HTTPException(status_code=400, detail="session_id requerido")
+
+        # Ejecuta el agente remoto de Vertex
+        response = await remote_app.async_run(
+            session_id=session_id,
+            input="crea los nodos para el diagrama de arquitectura"
+        )
+
+        return {
+            "ok": True,
+            "mensaje": "Agente ejecutado correctamente",
+            "response": response
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    
+    
 @router.post("/new_project")
 async def new_project(payload: NuevoProyectoPayload, db: Session = Depends(get_db)):
     try:

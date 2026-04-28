@@ -1,11 +1,13 @@
 from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Body
 from sqlalchemy.orm import Session
 from database import get_db
 from models import Departamento, Proyecto, Mensaje, SessionChat, Usuario, empleados_proyecto
 from pydantic import BaseModel
 from typing import Optional, List
 from sqlalchemy import desc, func
+import requests
+import json
 
 
 from routes.firestore_srs import Formulario
@@ -166,18 +168,18 @@ def eliminar_proyecto(folio: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Proyecto no encontrado")
 
     try:
-        #Buscar la sesión asociada al proyecto
+        
         sesion = db.query(SessionChat).filter(SessionChat.folio == folio).first()
 
-        #Si existe sesión, borrar primero sus mensajes y luego la sesión
+       
         if sesion:
             db.query(Mensaje).filter(Mensaje.id_session == sesion.id_session).delete()
             db.query(SessionChat).filter(SessionChat.folio == folio).delete()
 
-        #Borrar relaciones del proyecto con usuarios
+       
         db.query(empleados_proyecto).filter(empleados_proyecto.folio == folio).delete()
 
-        #Borrar el proyecto
+     
         db.query(Proyecto).filter(Proyecto.folio == folio).delete()
 
         db.commit()
@@ -193,3 +195,349 @@ def eliminar_proyecto(folio: int, db: Session = Depends(get_db)):
             status_code=500,
             detail=f"No se pudo eliminar el proyecto: {str(e)}"
         )
+
+
+
+
+#AGENTE DE FILTRADO
+
+#Endpoints iniciales para probar funcionamiento del agente
+@router.post("/proyectos/filtrar")
+def filtrar_proyectos(payload: dict = Body(...), db: Session = Depends(get_db)):
+    filtros = payload.get("filters", {})
+    limit = payload.get("limit", 20)
+
+    query = db.query(Proyecto.folio)
+
+    if filtros.get("folio") is not None:
+        query = query.filter(Proyecto.folio == int(filtros["folio"]))
+
+    if filtros.get("patrocinador"):
+        valor = str(filtros["patrocinador"]).strip()
+        query = query.filter(Proyecto.patrocinador.ilike(f"%{valor}%"))
+
+    if filtros.get("nombreproyecto"):
+        valor = str(filtros["nombreproyecto"]).strip()
+        query = query.filter(Proyecto.nombreproyecto.ilike(f"%{valor}%"))
+
+    if filtros.get("socionegocio"):
+        valor = str(filtros["socionegocio"]).strip()
+        query = query.filter(Proyecto.socionegocio.ilike(f"%{valor}%"))
+
+    if filtros.get("tipoiniciativa"):
+        valor = str(filtros["tipoiniciativa"]).strip()
+        query = query.filter(Proyecto.tipoiniciativa.ilike(f"%{valor}%"))
+
+    if filtros.get("descripciongeneral"):
+        valor = str(filtros["descripciongeneral"]).strip()
+        query = query.filter(Proyecto.descripciongeneral.ilike(f"%{valor}%"))
+
+    if filtros.get("cr") is not None:
+        query = query.filter(Proyecto.cr == int(filtros["cr"]))
+
+    if filtros.get("fechacreacion"):
+        fechas = filtros["fechacreacion"]
+
+        if fechas.get("from"):
+            fecha_desde = datetime.fromisoformat(fechas["from"])
+            query = query.filter(Proyecto.fechacreacion >= fecha_desde)
+
+        if fechas.get("to"):
+            fecha_hasta = datetime.fromisoformat(fechas["to"])
+            query = query.filter(Proyecto.fechacreacion <= fecha_hasta)
+            
+    
+    if filtros.get("fechaactualizacion"):
+        fechas_actualizacion = filtros["fechaactualizacion"]
+
+        if fechas_actualizacion.get("from"):
+            fecha_desde = datetime.fromisoformat(fechas_actualizacion["from"])
+            query = query.filter(Proyecto.fechaactualizacion >= fecha_desde)
+
+        if fechas_actualizacion.get("to"):
+            fecha_hasta = datetime.fromisoformat(fechas_actualizacion["to"])
+            query = query.filter(Proyecto.fechaactualizacion <= fecha_hasta)
+
+
+    resultados = query.limit(limit).all()
+
+    folios = [fila[0] for fila in resultados]
+
+    return {
+        "folios": folios,
+        "total": len(folios),
+        "filtros_recibidos": filtros
+    }
+
+
+
+@router.get("/proyectos/debug/folios")
+def debug_folios(db: Session = Depends(get_db)):
+    proyectos = db.query(
+        Proyecto.folio,
+        Proyecto.nombreproyecto,
+        Proyecto.patrocinador
+    ).order_by(Proyecto.folio.desc()).limit(10).all()
+
+    return [
+        {
+            "folio": p.folio,
+            "nombreproyecto": p.nombreproyecto,
+            "patrocinador": p.patrocinador
+        }
+        for p in proyectos
+    ]
+
+
+
+@router.post("/proyectos/por-folios")
+def obtener_proyectos_por_folios(payload: dict = Body(...), db: Session = Depends(get_db)):
+    folios = payload.get("folios", [])
+
+    if not folios:
+        return {
+            "proyectos": [],
+            "total": 0
+        }
+
+    proyectos = (
+        db.query(Proyecto)
+        .filter(Proyecto.folio.in_(folios))
+        .all()
+    )
+
+    return {
+        "proyectos": [
+            {
+                "folio": p.folio,
+                "nombreproyecto": p.nombreproyecto,
+                "fechacreacion": p.fechacreacion.isoformat() if p.fechacreacion else None,
+                "fechaactualizacion": p.fechaactualizacion.isoformat() if p.fechaactualizacion else None,
+                "tipoiniciativa": p.tipoiniciativa,
+                "cr": p.cr,
+                "patrocinador": p.patrocinador,
+                "socionegocio": p.socionegocio,
+                "descripciongeneral": p.descripciongeneral,
+                "objetivoiniciativa": p.objetivoiniciativa,
+                "requerimientosnegocio": p.requerimientosnegocio,
+                "beneficios": p.beneficios,
+                "participacionareas": p.participacionareas,
+                "supuestos": p.supuestos,
+                "exclusiones": p.exclusiones,
+                "restricciones": p.restricciones,
+                "anexos": p.anexos
+            }
+            for p in proyectos
+        ],
+        "total": len(proyectos)
+    }
+
+
+
+
+# Endpint específicos para buscar únicamente proyectos pertenecientes al usuario logueado
+
+@router.post("/usuarios/{idusuario}/proyectos/filtrar")
+def filtrar_proyectos_usuario(
+    idusuario: str,
+    payload: dict = Body(...),
+    db: Session = Depends(get_db)
+):
+    usuario = db.query(Usuario).filter(Usuario.idusuario == idusuario).first()
+    if not usuario:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+
+    depto = (
+        db.query(Departamento)
+        .filter(Departamento.iddepartamento == usuario.iddepartamento)
+        .first()
+    )
+    nombre_depto = depto.nombre if depto else "Sin área"
+
+    filtros = payload.get("filters", {})
+    limit = payload.get("limit", 20)
+
+    query = (
+        db.query(Proyecto, SessionChat)
+        .join(SessionChat, Proyecto.folio == SessionChat.folio)
+        .filter(SessionChat.idusuario == idusuario)
+    )
+
+    if filtros.get("folio") is not None:
+        query = query.filter(Proyecto.folio == int(filtros["folio"]))
+
+    if filtros.get("patrocinador"):
+        valor = str(filtros["patrocinador"]).strip()
+        query = query.filter(Proyecto.patrocinador.ilike(f"%{valor}%"))
+
+    if filtros.get("nombreproyecto"):
+        valor = str(filtros["nombreproyecto"]).strip()
+        query = query.filter(Proyecto.nombreproyecto.ilike(f"%{valor}%"))
+
+    if filtros.get("socionegocio"):
+        valor = str(filtros["socionegocio"]).strip()
+        query = query.filter(Proyecto.socionegocio.ilike(f"%{valor}%"))
+
+    if filtros.get("tipoiniciativa"):
+        valor = str(filtros["tipoiniciativa"]).strip()
+        query = query.filter(Proyecto.tipoiniciativa.ilike(f"%{valor}%"))
+
+    if filtros.get("descripciongeneral"):
+        valor = str(filtros["descripciongeneral"]).strip()
+        query = query.filter(Proyecto.descripciongeneral.ilike(f"%{valor}%"))
+
+    if filtros.get("cr") is not None:
+        query = query.filter(Proyecto.cr == int(filtros["cr"]))
+
+    if filtros.get("fechacreacion"):
+        fechas = filtros["fechacreacion"]
+
+        if fechas.get("from"):
+            fecha_desde = datetime.fromisoformat(fechas["from"])
+            query = query.filter(Proyecto.fechacreacion >= fecha_desde)
+
+        if fechas.get("to"):
+            fecha_hasta = datetime.fromisoformat(fechas["to"])
+            query = query.filter(Proyecto.fechacreacion <= fecha_hasta)
+
+    if filtros.get("fechaactualizacion"):
+        fechas_actualizacion = filtros["fechaactualizacion"]
+
+        if fechas_actualizacion.get("from"):
+            fecha_desde = datetime.fromisoformat(fechas_actualizacion["from"])
+            query = query.filter(Proyecto.fechaactualizacion >= fecha_desde)
+
+        if fechas_actualizacion.get("to"):
+            fecha_hasta = datetime.fromisoformat(fechas_actualizacion["to"])
+            query = query.filter(Proyecto.fechaactualizacion <= fecha_hasta)
+
+    resultados = (
+        query
+        .order_by(Proyecto.fechacreacion.desc())
+        .limit(limit)
+        .all()
+    )
+
+    proyectos = [
+        {
+            "folio": proyecto.folio,
+            "nombreproyecto": proyecto.nombreproyecto,
+            "fechacreacion": proyecto.fechacreacion.isoformat() if proyecto.fechacreacion else None,
+            "fechaactualizacion": proyecto.fechaactualizacion.isoformat() if proyecto.fechaactualizacion else None,
+            "departamento": nombre_depto,
+            "session_id": session.session_id,
+            "id_firestore_document": session.id_firestore_document,
+            "patrocinador": proyecto.patrocinador,
+            "socionegocio": proyecto.socionegocio,
+            "tipoiniciativa": proyecto.tipoiniciativa,
+            "cr": proyecto.cr
+        }
+        for proyecto, session in resultados
+    ]
+
+    return {
+        "proyectos": proyectos,
+        "folios": [p["folio"] for p in proyectos],
+        "total": len(proyectos),
+        "idusuario": idusuario,
+        "filtros_recibidos": filtros
+    }
+
+
+
+# Endpoint para buscar con el agente desde el frontend
+@router.post("/usuarios/{idusuario}/proyectos/buscar-con-agente-local")
+def buscar_con_agente_local(
+    idusuario: str,
+    payload: dict = Body(...)
+):
+    mensaje = payload.get("mensaje")
+
+    if not mensaje:
+        raise HTTPException(status_code=400, detail="El campo 'mensaje' es obligatorio")
+
+    app_name = "agente_filtrado"
+    user_id = idusuario
+    session_id = f"filter_session_{idusuario}"
+
+    # Crear sesión si no existe
+    session_url = f"http://127.0.0.1:8002/apps/{app_name}/users/{user_id}/sessions"
+
+    session_payload = {
+        "sessionId": session_id,
+        "state": {}
+    }
+
+    session_response = requests.post(session_url, json=session_payload)
+
+    if session_response.status_code not in [200, 409]:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error creando sesión ADK: {session_response.text}"
+        )
+
+    # Mandar mensaje al agente
+    run_url = "http://127.0.0.1:8002/run_sse"
+
+    run_payload = {
+        "app_name": app_name,
+        "user_id": user_id,
+        "session_id": session_id,
+        "new_message": {
+            "role": "user",
+            "parts": [
+                {
+                    "text": f"{mensaje}. Usa idusuario {idusuario}."
+                }
+            ]
+        },
+        "streaming": False
+    }
+
+    response = requests.post(run_url, json=run_payload)
+
+    if response.status_code != 200:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error ejecutando agente ADK: {response.text}"
+        )
+
+    # Leer eventos SSE
+    final_text = ""
+    proyectos = []
+    total = 0
+
+    for line in response.text.splitlines():
+        if line.startswith("data: "):
+            raw_json = line.replace("data: ", "")
+
+            try:
+                event = json.loads(raw_json)
+                content = event.get("content", {})
+
+                # texto final del agente
+                if content.get("role") == "model":
+                    for part in content.get("parts", []):
+                        if "text" in part:
+                            final_text += part["text"]
+
+                # respuesta de la función/tool
+                if content.get("role") == "user":
+                    for part in content.get("parts", []):
+                        function_response = part.get("functionResponse")
+                        if function_response:
+                            response_data = function_response.get("response", {})
+
+                            if "proyectos" in response_data:
+                                proyectos = response_data.get("proyectos", [])
+                                total = response_data.get("total", 0)
+
+            except Exception:
+                pass
+
+    return {
+        "respuesta_agente": final_text,
+        "proyectos": proyectos,
+        "total": total,
+        "idusuario": idusuario
+    }
