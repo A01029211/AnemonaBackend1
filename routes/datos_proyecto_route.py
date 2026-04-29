@@ -8,6 +8,10 @@ from typing import Optional, List
 from sqlalchemy import desc, func
 import requests
 import json
+from routes.firestore_srs import eliminar_documento_firestore
+from fastapi import APIRouter, HTTPException, Body
+import vertexai
+from vertexai import agent_engines
 
 
 from routes.firestore_srs import Formulario
@@ -158,7 +162,6 @@ def obtener_proyectos_recientes(idusuario: str, db: Session = Depends(get_db)):
 
 
 
-
 #Eliminar proyecto según su folio
 @router.delete("/proyectos/{folio}")
 def eliminar_proyecto(folio: int, db: Session = Depends(get_db)):
@@ -171,7 +174,12 @@ def eliminar_proyecto(folio: int, db: Session = Depends(get_db)):
         
         sesion = db.query(SessionChat).filter(SessionChat.folio == folio).first()
 
-       
+
+        # Borrar documento de Firestore
+        if sesion and sesion.id_firestore_document:
+            eliminar_documento_firestore(sesion.id_firestore_document)
+
+        # Borrar documento y sesión en SQL
         if sesion:
             db.query(Mensaje).filter(Mensaje.id_session == sesion.id_session).delete()
             db.query(SessionChat).filter(SessionChat.folio == folio).delete()

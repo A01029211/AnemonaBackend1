@@ -233,3 +233,20 @@ async def new_project(payload: NuevoProyectoPayload, db: Session = Depends(get_d
     except Exception as e:
         await asyncio.to_thread(db.rollback)
         raise HTTPException(status_code=500, detail=str(e))
+    
+
+
+def eliminar_documento_firestore(id_firestore_document: str):
+    try:
+        doc_ref = _db.collection(COLLECTION).document(id_firestore_document)
+        doc = doc_ref.get()
+
+        if not doc.exists:
+            raise Exception("El documento no existe en Firestore")
+        
+        doc_ref.delete()
+        return True
+    
+    except Exception as e:
+        raise Exception(f"Error al eliminar el documento de Firestore: {str(e)}")
+    
