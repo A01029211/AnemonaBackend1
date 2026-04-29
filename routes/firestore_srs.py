@@ -70,7 +70,9 @@ class Formulario(BaseModel):
 
 class NuevoProyectoPayload(BaseModel):
     formulario: Formulario
-    plantilla: Dict[str, Any]
+    plantilla: List[Dict[str, Any]]
+
+
 
 
 @router.post("/subir")
@@ -142,9 +144,10 @@ async def generar_arquitectura(session_id: str):
 @router.post("/new_project")
 async def new_project(payload: NuevoProyectoPayload, db: Session = Depends(get_db)):
     try:
-        # 1. Plantilla base
-        documento = payload.plantilla.copy()
+        widgets = [dict(w) for w in payload.plantilla]
         formulario = payload.formulario
+
+        # 1. Inyectar datos del formulario en w_000
         mapeo = {
             "solicitante":          "SOLICITANTE",
             "dga":                  "DGA",
@@ -155,43 +158,58 @@ async def new_project(payload: NuevoProyectoPayload, db: Session = Depends(get_d
             "nombre_iniciativa":    "NOMBRE_INICIATIVA",
             "tipo_iniciativa":      "TIPO_INICIATIVA",
         }
-        datos_generales = documento.get("DATOS_GENERALES", {})
-        for campo_modelo, campo_plantilla in mapeo.items():
-            valor = getattr(formulario, campo_modelo, None)
-            if valor is not None:
-                datos_generales[campo_plantilla] = valor
-        documento["DATOS_GENERALES"] = datos_generales
 
-        if formulario.departamentos_impactados:
-            documento["AREAS_IMPACTADAS"] = [
-                {"AREA_NEGOCIO": area, "PROCESO_IMPACTO": ""}
-                for area in formulario.departamentos_impactados
-            ]
+        for widget in widgets:
+            if widget["id_widget"] == "w_000":
+                for campo_modelo, campo_plantilla in mapeo.items():
+                    valor = getattr(formulario, campo_modelo, None)
+                    if valor is not None:
+                        widget["campos"][campo_plantilla] = valor
+                if formulario.departamentos_impactados:
+                    widget["campos"]["AREAS_IMPACTADAS"] = formulario.departamentos_impactados
+                break
 
-        # 2. Firestore y Vertex AI corren en paralelo
+        # 2. Construir el documento con la misma estructura que /modificar
+        widgets_ordenados = sorted(widgets, key=lambda w: w["posicion"])
+
+        nuevo_doc = {}
+        for w in widgets:
+            nuevo_doc[w["id_widget"]] = {
+                "titulo":             w["titulo"],
+                "descripcion_campos": w["descripcion_campos"],
+                "campos":             w["campos"],
+            }
+
+        nuevo_doc["posiciones"] = [w["id_widget"] for w in widgets_ordenados]
+
+        # 3. Subir a Firestore
         async def crear_firestore():
-            _, doc_ref = _db.collection(COLLECTION).add(documento)
-            return doc_ref.id
+            def _crear():
+                _, doc_ref = _db.collection(COLLECTION).add(nuevo_doc)
+                return doc_ref.id
+            return await asyncio.to_thread(_crear)
 
+        # 4. Crear sesión en Vertex AI
         async def crear_vertex_session(id_firestore_document):
-            remote_session = await remote_app.async_create_session(
-                user_id=formulario.usuario_id,
-                state={"doc_id":id_firestore_document}  # 👈 aquí
-            )
-            return remote_session["id"]
+            def _crear():
+                remote_session = remote_app.create_session(
+                    user_id=formulario.usuario_id,
+                    state={"doc_id": id_firestore_document}
+                )
+                return remote_session["id"]
+            return await asyncio.to_thread(_crear)
 
+        firestore_id = await crear_firestore()
+        session_id   = await crear_vertex_session(firestore_id)
 
-        firestore_id= await crear_firestore()
-        session_id=  await crear_vertex_session(firestore_id)
-
-        # 3. Guardar sesión en memoria
+        # 5. Guardar sesión en memoria
         sessions[session_id] = {
             "user_id":    formulario.usuario_id,
             "session_id": session_id,
-            "project_id": firestore_id
+            "project_id": firestore_id,
         }
 
-        # 4. Insertar en SQL en un thread separado para no bloquear
+        # 6. Insertar en SQL
         def insertar_en_sql():
             nuevo_proyecto = Proyecto(
                 fechacreacion=datetime.now(),
@@ -203,7 +221,7 @@ async def new_project(payload: NuevoProyectoPayload, db: Session = Depends(get_d
                 socionegocio=formulario.nombre_socio_negocio,
                 descripciongeneral=formulario.info_contacto,
                 participacionareas=", ".join(formulario.departamentos_impactados)
-                if formulario.departamentos_impactados else None,
+                    if formulario.departamentos_impactados else None,
             )
             db.add(nuevo_proyecto)
             db.flush()
@@ -227,7 +245,9 @@ async def new_project(payload: NuevoProyectoPayload, db: Session = Depends(get_d
             "ok":         True,
             "project_id": firestore_id,
             "session_id": session_id,
-            "mensaje":    f"Documento Firestore '{firestore_id}' y sesión '{session_id}' creados"
+            "folio":      folio,
+            "orden":      nuevo_doc["posiciones"],
+            "mensaje":    f"Documento '{firestore_id}' y sesión '{session_id}' creados",
         }
 
     except Exception as e:
