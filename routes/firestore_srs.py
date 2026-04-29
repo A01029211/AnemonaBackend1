@@ -1,5 +1,6 @@
 import asyncio
 from datetime import datetime
+import json
 from fastapi import APIRouter, HTTPException
 from google.cloud import firestore
 from pydantic import BaseModel
@@ -23,10 +24,10 @@ FIRESTORE_PROJECT = os.getenv("FIRESTORE_PROJECT")
 COLLECTION = os.getenv("FIRESTORE_COLLECTION", "documentos")
 DOC_ID = "DDYWBQOZG2WYrHrs4a3e"
 
-FIRESTORE_CREDENTIALS_PATH = os.getenv("GOOGLE_APPLICATION_CREDENTIALS_FIRESTORE")
-credentials = service_account.Credentials.from_service_account_file(
-    FIRESTORE_CREDENTIALS_PATH
-)
+FIRESTORE_CREDENTIALS_JSON = os.getenv("FIREBASE_CREDENTIALS")
+credentials_info = json.loads(FIRESTORE_CREDENTIALS_JSON)
+credentials = service_account.Credentials.from_service_account_info(credentials_info)
+
 _db = firestore.Client(
     project=FIRESTORE_PROJECT,
     credentials=credentials
