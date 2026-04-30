@@ -550,6 +550,12 @@ def buscar_con_agente_local(
         "idusuario": idusuario
     }
 
+PROJECT_ID = "anemona-2130e"
+LOCATION = "us-central1"
+RESOURCE_ID = "6939629761115193344"
+               
+AGENT_RESOURCE_NAME = f"projects/{PROJECT_ID}/locations/{LOCATION}/reasoningEngines/{RESOURCE_ID}"
+
 
 #Endpoint para buscar proyectos con el agente desplegado
 @router.post("/usuarios/{idusuario}/proyectos/buscar-con-agente")
