@@ -8,6 +8,7 @@ from routes.datos_proyecto_route import router as datos_proyecto_route
 from routes.firestore_srs import router as firestore_router
 from routes.modificacion_widgets import router as widgets_router
 from routes.email_route import router as email_router
+from routes.arquitectura import router as arquitectura
 from dotenv import load_dotenv
 import os
 #
@@ -28,6 +29,7 @@ app.include_router(login_router)
 app.include_router(datos_proyecto_route)
 app.include_router(firestore_router)
 app.include_router(widgets_router)
+app.include_router(arquitectura)
 app.include_router(
     agent_call,
     prefix="/agent",
