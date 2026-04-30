@@ -36,6 +36,7 @@ class Widget(BaseModel):
     posicion: int
     id_widget: str
     titulo: str
+    objetivo_widget: str
     # descripción de cada campo (ej: {"nombre": "Nombre del usuario"})
     descripcion_campos: Dict[str, str]
     # valores de los campos (ej: {"nombre": "Darío"})
@@ -85,3 +86,47 @@ async def crear_widgets(widgets: List[Widget], doc_id: str ):
     _db.collection(COLLECTION).document(doc_id).set(nuevo_doc)
 
     return {"orden": nuevo_doc["posiciones"], "widgets_guardados": list(nuevo_doc.keys())}
+
+
+
+@router.post("/widget")
+async def agregar_widget(widget: Widget):
+
+    widget_ref = _db.collection("widgets").document(widget.id_widget)
+
+    if widget_ref.get().exists:
+        raise HTTPException(
+            status_code=409,
+            detail=f"El widget '{widget.id_widget}' ya existe."
+        )
+
+    widget_ref.set(widget.model_dump())
+
+    return {
+        "mensaje": "Widget agregado correctamente.",
+        "id_widget": widget.id_widget,
+    }
+
+@router.post("/info_widgets")
+async def obtener_plantilla_widgets(ids: List[str]):
+    def _obtener():
+        resultado = []
+        no_encontrados = []
+
+        for id_widget in ids:
+            doc = _db.collection("widgets").document(id_widget).get()
+            if doc.exists:
+                resultado.append(doc.to_dict())
+            else:
+                no_encontrados.append(id_widget)
+
+        return resultado, no_encontrados
+
+    widgets, no_encontrados = await asyncio.to_thread(_obtener)
+
+    return {
+        "ok": True,
+        "total": len(widgets),
+        "widgets": widgets,
+        "no_encontrados": no_encontrados if no_encontrados else [],
+    }

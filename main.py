@@ -7,9 +7,10 @@ from routes.agent_call import router as agent_call
 from routes.datos_proyecto_route import router as datos_proyecto_route
 from routes.firestore_srs import router as firestore_router
 from routes.modificacion_widgets import router as widgets_router
+from routes.email_route import router as email_router
 from dotenv import load_dotenv
 import os
-#IMPORTANTE PARA VARIABLES DE ENTORNO
+
 load_dotenv()
 
 app = FastAPI()
@@ -22,14 +23,20 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(login_router)  # ← así registras las rutas
+app.include_router(login_router)
 app.include_router(datos_proyecto_route)
 app.include_router(firestore_router)
 app.include_router(widgets_router)
 app.include_router(
-    agent_call,    
-    prefix="/agent",   # <-- prefijo que quieres para todas las rutas del router
-    tags=["VertexAI"])  # ruta agent_call (dario)
+    agent_call,
+    prefix="/agent",
+    tags=["VertexAI"]
+)
+app.include_router(
+    email_router,
+    prefix="/email",
+    tags=["Email"]
+)
 
 @app.get("/test-db")
 def test_db():
