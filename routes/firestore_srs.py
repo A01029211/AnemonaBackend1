@@ -35,7 +35,7 @@ _db = firestore.Client(
 
 PROJECT_ID = "anemona-2130e"
 LOCATION = "us-central1"
-RESOURCE_ID = "3797876439815028736"
+RESOURCE_ID = "858714733002358784"
 
 AGENT_RESOURCE_NAME = f"projects/{PROJECT_ID}/locations/{LOCATION}/reasoningEngines/{RESOURCE_ID}"
 
