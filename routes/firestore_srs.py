@@ -14,6 +14,7 @@ from requests import Session
 import vertexai
 from vertexai import agent_engines
 from fastapi import APIRouter, HTTPException, Depends
+from fastapi import BackgroundTasks 
 
 from database import get_db
 from models import Proyecto, SessionChat
@@ -119,24 +120,37 @@ async def obtener_arquitectura(doc_id: str):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+    
+async def _ejecutar_agente(session_id: str):
+    """Corre en background — no bloquea la respuesta HTTP."""
+    try:
+        remote_app = agent_engines.get(AGENT_RESOURCE_NAME)
+        async for _ in remote_app.async_stream_query(
+            session_id=session_id,
+            message="genera el diagrama de arquitectura",
+        ):
+            pass
+    except Exception as e:
+        print(f"[arquitectura-bg] Error: {e}")
 
 @router.post("/generar-arquitectura")
 async def generar_arquitectura(session_id: str):
     try:
         if not session_id:
             raise HTTPException(status_code=400, detail="session_id requerido")
+        
+        BackgroundTasks.add_task(_ejecutar_agente, session_id)
 
-        # Ejecuta el agente remoto de Vertex
-        response = await remote_app.async_run(
+        remote_app = agent_engines.get(AGENT_RESOURCE_NAME)
+
+        # Consumir el stream completo (el agente escribe en Firestore internamente)
+        async for _ in remote_app.async_stream_query(
             session_id=session_id,
-            input="crea los nodos para el diagrama de arquitectura"
-        )
+            message="genera el diagrama de arquitectura",  
+        ):
+            pass
 
-        return {
-            "ok": True,
-            "mensaje": "Agente ejecutado correctamente",
-            "response": response
-        }
+        return {"ok": True, "mensaje": "Arquitectura generada correctamente"}
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
