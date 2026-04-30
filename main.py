@@ -10,7 +10,7 @@ from routes.modificacion_widgets import router as widgets_router
 from routes.email_route import router as email_router
 from dotenv import load_dotenv
 import os
-
+#
 load_dotenv()
 
 app = FastAPI()
