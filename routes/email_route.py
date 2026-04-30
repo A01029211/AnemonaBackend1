@@ -34,7 +34,7 @@ SMTP_PASSWORD = os.environ["SMTP_PASSWORD"]
 BANORTE_LOGO_URL = "https://upload.wikimedia.org/wikipedia/commons/thumb/5/53/Logo_de_Banorte.svg/1280px-Logo_de_Banorte.svg.png"
 
 
-# ← NUEVO: descarga el logo y lo convierte a base64 para que no sea bloqueado
+# ← NUEVO: descarga el logo y lo convierte a base64 para que no sea bloqueado sds
 def _get_logo_base64() -> str:
     try:
         req = urllib.request.Request(BANORTE_LOGO_URL, headers={"User-Agent": "Mozilla/5.0"})
