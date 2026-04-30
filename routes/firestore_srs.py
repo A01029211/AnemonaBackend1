@@ -18,7 +18,7 @@ from fastapi import BackgroundTasks
 
 from database import get_db
 from models import Proyecto, SessionChat
-
+#prueba trugger
 load_dotenv()
 
 FIRESTORE_PROJECT = os.getenv("FIRESTORE_PROJECT")
