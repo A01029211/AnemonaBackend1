@@ -17,11 +17,9 @@ app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://10.22.151.18:3000", 
-                   "sa://service-637376850775@gcp-sa-aiplatform-re.iam.gserviceaccount.com"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH"],
+    allow_headers=["Authorization", "Content-Type", "Accept"],
 )
 
 app.include_router(login_router)
