@@ -19,7 +19,7 @@ app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:3000", "http://10.22.151.18:3000", 
-                   "sa://service-637376850775@gcp-sa-aiplatform-re.iam.gserviceaccount.com"],
+                   "sa://service-637376850775@gcp-sa-aiplatform-re.iam.gserviceaccount.com", "https://anemona-backend-fireabse--anemona-2130e.us-east4.hosted.app"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
