@@ -26,10 +26,15 @@ COLLECTION = os.getenv("FIRESTORE_COLLECTION", "documentos")
 DOC_ID = "DDYWBQOZG2WYrHrs4a3e"
 
 
+##QUITAR PARA REMOTO, CREDIENCIALES ARRIBA SIRVE LOCAL, ABAJO REMOTO
+#FIRESTORE_CREDENTIALS_PATH = os.getenv("GOOGLE_APPLICATION_CREDENTIALS_FIRESTORE")
+#credentials = service_account.Credentials.from_service_account_file(
+#    FIRESTORE_CREDENTIALS_PATH
+#)
 FIRESTORE_CREDENTIALS_JSON = os.getenv("FIREBASE_CREDENTIALS")
 credentials_info = json.loads(FIRESTORE_CREDENTIALS_JSON)
 credentials = service_account.Credentials.from_service_account_info(credentials_info)
-
+##QUITAR PARA REMOTO
 
 _db = firestore.Client(
     project=FIRESTORE_PROJECT,
@@ -38,7 +43,7 @@ _db = firestore.Client(
 
 PROJECT_ID = "anemona-2130e"
 LOCATION = "us-central1"
-RESOURCE_ID = "5581864842207166464"
+RESOURCE_ID = "5862433821336535040"
 
 AGENT_RESOURCE_NAME = f"projects/{PROJECT_ID}/locations/{LOCATION}/reasoningEngines/{RESOURCE_ID}"
 
@@ -157,7 +162,6 @@ async def generar_arquitectura(session_id: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     
-    
 @router.post("/new_project")
 async def new_project(payload: NuevoProyectoPayload, db: Session = Depends(get_db)):
     try:
@@ -186,18 +190,16 @@ async def new_project(payload: NuevoProyectoPayload, db: Session = Depends(get_d
                     widget["campos"]["AREAS_IMPACTADAS"] = formulario.departamentos_impactados
                 break
 
-        # 2. Construir el documento con la misma estructura que /modificar
-        widgets_ordenados = sorted(widgets, key=lambda w: w["posicion"])
-
+        # 2. Construir el documento con posición como llave
         nuevo_doc = {}
-        for w in widgets:
-            nuevo_doc[w["id_widget"]] = {
+        for w in sorted(widgets, key=lambda x: x["posicion"]):
+            nuevo_doc[str(w["posicion"])] = {
+                "id_widget":          w["id_widget"],
                 "titulo":             w["titulo"],
+                "objetivo_widget":    w["objetivo_widget"],
                 "descripcion_campos": w["descripcion_campos"],
                 "campos":             w["campos"],
             }
-
-        nuevo_doc["posiciones"] = [w["id_widget"] for w in widgets_ordenados]
 
         # 3. Subir a Firestore
         async def crear_firestore():
@@ -263,15 +265,13 @@ async def new_project(payload: NuevoProyectoPayload, db: Session = Depends(get_d
             "project_id": firestore_id,
             "session_id": session_id,
             "folio":      folio,
-            "orden":      nuevo_doc["posiciones"],
+            "widgets_guardados": list(nuevo_doc.keys()),
             "mensaje":    f"Documento '{firestore_id}' y sesión '{session_id}' creados",
         }
 
     except Exception as e:
         await asyncio.to_thread(db.rollback)
         raise HTTPException(status_code=500, detail=str(e))
-    
-
 
 def eliminar_documento_firestore(id_firestore_document: str):
     try:

@@ -23,9 +23,16 @@ app = FastAPI()
 FIRESTORE_PROJECT = os.getenv("FIRESTORE_PROJECT")
 COLLECTION = os.getenv("FIRESTORE_COLLECTION", "documentos")
 import json
+
+##QUITAR PARA REMOTO, CREDIENCIALES ARRIBA SIRVE LOCAL, ABAJO REMOTO
+#FIRESTORE_CREDENTIALS_PATH = os.getenv("GOOGLE_APPLICATION_CREDENTIALS_FIRESTORE")
+#credentials = service_account.Credentials.from_service_account_file(
+#    FIRESTORE_CREDENTIALS_PATH
+#)
 FIRESTORE_CREDENTIALS_JSON = os.getenv("FIREBASE_CREDENTIALS")
 credentials_info = json.loads(FIRESTORE_CREDENTIALS_JSON)
 credentials = service_account.Credentials.from_service_account_info(credentials_info)
+##QUITAR PARA REMOTO
 
 _db = firestore.Client(
     project=FIRESTORE_PROJECT,
@@ -60,34 +67,32 @@ async def bajar_documento(doc_id: str):
 
 
 @router.post("/modificar/{doc_id}")
-async def crear_widgets(widgets: List[Widget], doc_id: str ):
+async def crear_widgets(widgets: List[Widget], doc_id: str):
     doc = await bajar_documento(doc_id)
-    
-    SKIP_FIELDS = {"posiciones", "nodos"}
-    
-    ids_recibidos = {w.id_widget for w in widgets}
-    
+
+    SKIP_FIELDS = {"nodos"}  # ya no existe "posiciones"
+
+    ids_recibidos = {str(w.posicion) for w in widgets}  # llave = posición
+
     nuevo_doc = {}
     for key in doc:
         if key in SKIP_FIELDS:
             continue
         if key in ids_recibidos:
             nuevo_doc[key] = doc[key]
-    
+
     for w in widgets:
-        nuevo_doc[w.id_widget] = {
+        nuevo_doc[str(w.posicion)] = {   # llave = posición, no id_widget
+            "id_widget": w.id_widget,    # id_widget se guarda como campo interno
             "titulo": w.titulo,
+            "objetivo_widget": w.objetivo_widget,
             "descripcion_campos": w.descripcion_campos,
             "campos": w.campos,
         }
-    
-    widgets_ordenados = sorted(widgets, key=lambda w: w.posicion)
-    nuevo_doc["posiciones"] = [w.id_widget for w in widgets_ordenados]
 
     _db.collection(COLLECTION).document(doc_id).set(nuevo_doc)
 
-    return {"orden": nuevo_doc["posiciones"], "widgets_guardados": list(nuevo_doc.keys())}
-
+    return {"widgets_guardados": list(nuevo_doc.keys())}
 
 
 @router.post("/widget")
