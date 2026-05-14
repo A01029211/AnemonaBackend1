@@ -3,6 +3,8 @@ import os
 import json
 import base64
 import ssl
+import time
+import urllib.request  # ← NUEVO
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
@@ -13,8 +15,11 @@ from fastapi.security import OAuth2PasswordBearer
 from pydantic import BaseModel
 from google.cloud import firestore
 from google import genai
+from sqlalchemy.orm import Session
 
 from utils.auth import leer_token
+from database import get_db
+from models import Usuario
 
 router = APIRouter()
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
@@ -26,14 +31,26 @@ _db = firestore.Client(project=FIRESTORE_PROJECT)
 SMTP_USER     = os.environ["SMTP_USER"]
 SMTP_PASSWORD = os.environ["SMTP_PASSWORD"]
 
-# Logo de Banorte — URL pública de Wikipedia
 BANORTE_LOGO_URL = "https://upload.wikimedia.org/wikipedia/commons/thumb/5/53/Logo_de_Banorte.svg/1280px-Logo_de_Banorte.svg.png"
 
 
-# ── Model — ahora acepta pdf_base64 opcional ─────────────────────────────
+# ← NUEVO: descarga el logo y lo convierte a base64 para que no sea bloqueado
+def _get_logo_base64() -> str:
+    try:
+        req = urllib.request.Request(BANORTE_LOGO_URL, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=10) as response:
+            data = response.read()
+        return f"data:image/png;base64,{base64.b64encode(data).decode()}"
+    except Exception as e:
+        print(f"No se pudo descargar el logo: {e}")
+        return BANORTE_LOGO_URL
+
+
+# ── Model ─────────────────────────────────────────────────────────────────
 class SendEmailRequest(BaseModel):
     doc_id: str
-    pdf_base64: str | None = None  # ← el PDF capturado desde el frontend
+    pdf_base64: str | None = None
+    user_name: str | None = None  # ← NUEVO: viene del frontend (localStorage)
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────
@@ -46,9 +63,23 @@ def _get_srs_data(doc_id: str) -> dict:
 
 def _extract_campos(srs_data: dict) -> dict:
     campos = {}
+
     for wid in srs_data.get("posiciones", []):
         widget_data = srs_data.get(wid, {})
         campos.update(widget_data.get("campos", {}))
+
+    if not campos:
+        datos_generales = srs_data.get("DATOS_GENERALES", {})
+        if datos_generales:
+            campos.update(datos_generales)
+
+    if not campos:
+        for key in ["NOMBRE_INICIATIVA", "SOLICITANTE", "TIPO_INICIATIVA",
+                    "PATROCINADOR", "SOCIO", "INFO_CONTACTO", "DGA", "CR"]:
+            if key in srs_data:
+                campos[key] = srs_data[key]
+
+    print(f"Campos extraídos: {campos}")
     return campos
 
 
@@ -67,8 +98,20 @@ Usa lenguaje ejecutivo y conciso. Responde SOLO con el texto, sin markdown ni en
 SRS:
 {json.dumps(srs_data, ensure_ascii=False, indent=2)[:8000]}
 """
-    response = client.models.generate_content(model="gemini-2.5-flash", contents=prompt)
-    return response.text.strip()
+    for intento in range(5):
+        try:
+            response = client.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=prompt
+            )
+            return response.text.strip()
+        except Exception as e:
+            if "429" in str(e) and intento < 4:
+                espera = 10 * (intento + 1)
+                print(f"Rate limit, esperando {espera}s... (intento {intento+1}/5)")
+                time.sleep(espera)
+            else:
+                raise
 
 
 def _data_row(label: str, value: str) -> str:
@@ -86,8 +129,12 @@ def _build_html(campos: dict, summary: str, user_name: str, doc_id: str) -> str:
     nombre_iniciativa = campos.get("NOMBRE_INICIATIVA", "N/A")
     solicitante       = campos.get("SOLICITANTE", "N/A")
     tipo_iniciativa   = campos.get("TIPO_INICIATIVA", "N/A")
-    dga               = campos.get("DGA", "N/A")
+    socio             = campos.get("SOCIO", "N/A")
     patrocinador      = campos.get("PATROCINADOR", "N/A")
+    info_contacto     = campos.get("INFO_CONTACTO", "N/A")
+    dga               = campos.get("DGA", "N/A")
+    cr                = campos.get("CR", "N/A")
+    logo_src          = BANORTE_LOGO_URL
 
     return f"""
 <!DOCTYPE html>
@@ -99,30 +146,25 @@ def _build_html(campos: dict, summary: str, user_name: str, doc_id: str) -> str:
       <table width="620" cellpadding="0" cellspacing="0"
              style="background:#fff;border-radius:10px;box-shadow:0 4px 20px rgba(0,0,0,0.10);overflow:hidden;">
 
-        <!-- HEADER ROJO CON LOGO BANORTE -->
+        <!-- HEADER -->
         <tr>
-          <td style="background:#EB0029;padding:24px 36px;">
+          <td style="background:#1a1a2e;padding:24px 36px;">
             <table width="100%" cellpadding="0" cellspacing="0">
               <tr>
                 <td>
-                  <!-- Logo desde Wikipedia — PNG con fondo transparente -->
-                  <img src="{BANORTE_LOGO_URL}"
-                       alt="Banorte" height="40"
-                       style="display:block;filter:brightness(0) invert(1);"/>
+                  <img src="{logo_src}" alt="Banorte" height="40" style="display:block;"/>
                 </td>
                 <td align="right">
-                  <span style="color:rgba(255,255,255,0.85);font-size:12px;">
-                    Gestión de Requerimientos
-                  </span>
+                  <span style="color:#8888aa;font-size:12px;">Gestión de Requerimientos</span>
                 </td>
               </tr>
             </table>
           </td>
         </tr>
 
-        <!-- BANDA AZUL OSCURO -->
+        <!-- BANDA -->
         <tr>
-          <td style="background:#1a1a2e;padding:18px 36px;">
+          <td style="background:#1a1a2e;padding:18px 36px;border-top:1px solid #2e2e4e;">
             <p style="margin:0;color:#fff;font-size:17px;font-weight:700;">
               Levantamiento de Requerimiento
             </p>
@@ -161,8 +203,11 @@ def _build_html(campos: dict, summary: str, user_name: str, doc_id: str) -> str:
                     {_data_row("Nombre de la iniciativa", nombre_iniciativa)}
                     {_data_row("Solicitante", solicitante)}
                     {_data_row("Tipo de iniciativa", tipo_iniciativa)}
-                    {_data_row("DGA", dga)}
+                    {_data_row("Socio de negocio", socio)}
                     {_data_row("Patrocinador", patrocinador)}
+                    {_data_row("Contacto", info_contacto)}
+                    {_data_row("DGA", dga)}
+                    {_data_row("CR", cr)}
                   </table>
                 </td>
               </tr>
@@ -225,31 +270,23 @@ def _build_html(campos: dict, summary: str, user_name: str, doc_id: str) -> str:
 
 
 def _send_smtp(to_email: str, subject: str, html: str, pdf_base64: str | None = None):
-    msg = MIMEMultipart("mixed")  # ← "mixed" permite adjuntos
+    msg = MIMEMultipart("mixed")
     msg["Subject"] = subject
     msg["From"]    = SMTP_USER
     msg["To"]      = to_email
 
-    # Parte HTML del correo
     msg.attach(MIMEText(html, "html", "utf-8"))
 
-    # Adjuntar el PDF si viene del frontend
     if pdf_base64:
         pdf_bytes = base64.b64decode(pdf_base64)
         attachment = MIMEBase("application", "pdf")
         attachment.set_payload(pdf_bytes)
         encoders.encode_base64(attachment)
-        attachment.add_header(
-            "Content-Disposition",
-            "attachment",
-            filename="SRS_Documento.pdf"
-        )
+        attachment.add_header("Content-Disposition", "attachment", filename="SRS_Documento.pdf")
         msg.attach(attachment)
 
     context = ssl.create_default_context()
-    context.check_hostname = False
-    context.verify_mode = ssl.CERT_NONE
-    with smtplib.SMTP_SSL("smtp.gmail.com", 465, context=context, timeout=15, local_hostname="localhost") as server:
+    with smtplib.SMTP_SSL("smtp.gmail.com", 465, context=context, timeout=15) as server:
         server.login(SMTP_USER, SMTP_PASSWORD)
         server.sendmail(SMTP_USER, to_email, msg.as_string())
 
@@ -259,25 +296,35 @@ def _send_smtp(to_email: str, subject: str, html: str, pdf_base64: str | None = 
 async def send_srs_email(
     request: SendEmailRequest,
     token: str = Depends(oauth2_scheme),
+    db: Session = Depends(get_db),
 ):
     datos = leer_token(token)
     if not datos:
         raise HTTPException(status_code=401, detail="Token inválido o expirado")
 
-    user_email = datos["correo"]
-    user_name  = datos.get("nombre", "Usuario")
+    usuario = db.query(Usuario).filter(Usuario.correo == datos["correo"]).first()
+    if not usuario:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+
+    user_email = usuario.correo
+    # ← CAMBIADO: usa el nombre del frontend, si no viene usa el de la BD
+    user_name = request.user_name or f"{usuario.nombre} {usuario.apellidopaterno}"
 
     try:
+        print("1. Obteniendo datos de Firestore...")
         srs_data = _get_srs_data(request.doc_id)
-        campos   = _extract_campos(srs_data)
-        summary  = _generate_summary(srs_data)
-        html     = _build_html(campos, summary, user_name, request.doc_id)
-
+        print("2. Firestore OK. Extrayendo campos...")
+        campos = _extract_campos(srs_data)
+        print("3. Campos extraídos:", campos)
+        print("4. Generando resumen con Gemini...")
+        summary = _generate_summary(srs_data)
+        print("5. Resumen generado. Construyendo HTML...")
+        html = _build_html(campos, summary, user_name, request.doc_id)
+        print("6. HTML listo. Enviando correo...")
         nombre_iniciativa = campos.get("NOMBRE_INICIATIVA", request.doc_id)
         subject = f"SRS · {nombre_iniciativa}"
-
-        # Manda el correo con el PDF adjunto si viene
         _send_smtp(user_email, subject, html, request.pdf_base64)
+        print("7. Correo enviado OK")
 
         return {"ok": True, "message": f"Correo enviado a {user_email}"}
 
