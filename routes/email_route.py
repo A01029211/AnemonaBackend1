@@ -38,6 +38,17 @@ SMTP_PASSWORD = os.environ["SMTP_PASSWORD"]
 BANORTE_LOGO_URL = "https://upload.wikimedia.org/wikipedia/commons/thumb/5/53/Logo_de_Banorte.svg/1280px-Logo_de_Banorte.svg.png"
 
 
+# ← NUEVO: descarga el logo y lo convierte a base64 para que no sea bloqueado sds
+def _get_logo_base64() -> str:
+    try:
+        req = urllib.request.Request(BANORTE_LOGO_URL, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=10) as response:
+            data = response.read()
+        return f"data:image/png;base64,{base64.b64encode(data).decode()}"
+    except Exception as e:
+        print(f"No se pudo descargar el logo: {e}")
+        return BANORTE_LOGO_URL
+
 # ← NUEVO: descarga el logo y lo convierte a base64 para que no sea bloqueado
 def _get_logo_base64() -> str:
     try:
@@ -259,7 +270,7 @@ def _build_html(campos: dict, summary: str, user_name: str, doc_id: str) -> str:
               Este mensaje fue generado automáticamente — por favor no respondas.
             </p>
             <p style="margin:6px 0 0;font-size:11px;color:#c0c0c0;">
-              © 2025 Grupo Financiero Banorte · Anemona SRS Assistant
+              ©️ 2025 Grupo Financiero Banorte · Anemona SRS Assistant
             </p>
           </td>
         </tr>

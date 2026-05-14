@@ -1,5 +1,6 @@
 import asyncio
 from datetime import datetime
+import json
 from fastapi import APIRouter, HTTPException
 from google.cloud import firestore
 from pydantic import BaseModel
@@ -13,20 +14,28 @@ from requests import Session
 import vertexai
 from vertexai import agent_engines
 from fastapi import APIRouter, HTTPException, Depends
+from fastapi import BackgroundTasks 
 
 from database import get_db
 from models import Proyecto, SessionChat
-
+#prueba trugger
 load_dotenv()
 
 FIRESTORE_PROJECT = os.getenv("FIRESTORE_PROJECT")
 COLLECTION = os.getenv("FIRESTORE_COLLECTION", "documentos")
 DOC_ID = "DDYWBQOZG2WYrHrs4a3e"
 
-FIRESTORE_CREDENTIALS_PATH = os.getenv("GOOGLE_APPLICATION_CREDENTIALS_FIRESTORE")
-credentials = service_account.Credentials.from_service_account_file(
-    FIRESTORE_CREDENTIALS_PATH
-)
+
+##QUITAR PARA REMOTO, CREDIENCIALES ARRIBA SIRVE LOCAL, ABAJO REMOTO
+#FIRESTORE_CREDENTIALS_PATH = os.getenv("GOOGLE_APPLICATION_CREDENTIALS_FIRESTORE")
+#credentials = service_account.Credentials.from_service_account_file(
+#    FIRESTORE_CREDENTIALS_PATH
+#)
+FIRESTORE_CREDENTIALS_JSON = os.getenv("FIREBASE_CREDENTIALS")
+credentials_info = json.loads(FIRESTORE_CREDENTIALS_JSON)
+credentials = service_account.Credentials.from_service_account_info(credentials_info)
+##QUITAR PARA REMOTO
+
 _db = firestore.Client(
     project=FIRESTORE_PROJECT,
     credentials=credentials
@@ -34,7 +43,7 @@ _db = firestore.Client(
 
 PROJECT_ID = "anemona-2130e"
 LOCATION = "us-central1"
-RESOURCE_ID = "3887213958595084288"
+RESOURCE_ID = "5862433821336535040"
 
 AGENT_RESOURCE_NAME = f"projects/{PROJECT_ID}/locations/{LOCATION}/reasoningEngines/{RESOURCE_ID}"
 
@@ -118,28 +127,40 @@ async def obtener_arquitectura(doc_id: str):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+    
+async def _ejecutar_agente(session_id: str):
+    """Corre en background — no bloquea la respuesta HTTP."""
+    try:
+        remote_app = agent_engines.get(AGENT_RESOURCE_NAME)
+        async for _ in remote_app.async_stream_query(
+            session_id=session_id,
+            message="genera el diagrama de arquitectura",
+        ):
+            pass
+    except Exception as e:
+        print(f"[arquitectura-bg] Error: {e}")
 
 @router.post("/generar-arquitectura")
 async def generar_arquitectura(session_id: str):
     try:
         if not session_id:
             raise HTTPException(status_code=400, detail="session_id requerido")
+        
+        BackgroundTasks.add_task(_ejecutar_agente, session_id)
 
-        # Ejecuta el agente remoto de Vertex
-        response = await remote_app.async_run(
+        remote_app = agent_engines.get(AGENT_RESOURCE_NAME)
+
+        # Consumir el stream completo (el agente escribe en Firestore internamente)
+        async for _ in remote_app.async_stream_query(
             session_id=session_id,
-            input="crea los nodos para el diagrama de arquitectura"
-        )
+            message="genera el diagrama de arquitectura",  
+        ):
+            pass
 
-        return {
-            "ok": True,
-            "mensaje": "Agente ejecutado correctamente",
-            "response": response
-        }
+        return {"ok": True, "mensaje": "Arquitectura generada correctamente"}
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-    
     
 @router.post("/new_project")
 async def new_project(payload: NuevoProyectoPayload, db: Session = Depends(get_db)):
@@ -169,18 +190,16 @@ async def new_project(payload: NuevoProyectoPayload, db: Session = Depends(get_d
                     widget["campos"]["AREAS_IMPACTADAS"] = formulario.departamentos_impactados
                 break
 
-        # 2. Construir el documento con la misma estructura que /modificar
-        widgets_ordenados = sorted(widgets, key=lambda w: w["posicion"])
-
+        # 2. Construir el documento con posición como llave
         nuevo_doc = {}
-        for w in widgets:
-            nuevo_doc[w["id_widget"]] = {
+        for w in sorted(widgets, key=lambda x: x["posicion"]):
+            nuevo_doc[str(w["posicion"])] = {
+                "id_widget":          w["id_widget"],
                 "titulo":             w["titulo"],
+                "objetivo_widget":    w["objetivo_widget"],
                 "descripcion_campos": w["descripcion_campos"],
                 "campos":             w["campos"],
             }
-
-        nuevo_doc["posiciones"] = [w["id_widget"] for w in widgets_ordenados]
 
         # 3. Subir a Firestore
         async def crear_firestore():
@@ -246,10 +265,25 @@ async def new_project(payload: NuevoProyectoPayload, db: Session = Depends(get_d
             "project_id": firestore_id,
             "session_id": session_id,
             "folio":      folio,
-            "orden":      nuevo_doc["posiciones"],
+            "widgets_guardados": list(nuevo_doc.keys()),
             "mensaje":    f"Documento '{firestore_id}' y sesión '{session_id}' creados",
         }
 
     except Exception as e:
         await asyncio.to_thread(db.rollback)
         raise HTTPException(status_code=500, detail=str(e))
+
+def eliminar_documento_firestore(id_firestore_document: str):
+    try:
+        doc_ref = _db.collection(COLLECTION).document(id_firestore_document)
+        doc = doc_ref.get()
+
+        if not doc.exists:
+            raise Exception("El documento no existe en Firestore")
+        
+        doc_ref.delete()
+        return True
+    
+    except Exception as e:
+        raise Exception(f"Error al eliminar el documento de Firestore: {str(e)}")
+    

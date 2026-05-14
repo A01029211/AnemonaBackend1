@@ -11,14 +11,15 @@ from routes.email_route import router as email_router
 from routes.arquitectura import router as arquitectura
 from dotenv import load_dotenv
 import os
-
+#
 load_dotenv()
 
 app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=["http://localhost:3000", "http://10.22.151.18:3000", 
+                   "sa://service-637376850775@gcp-sa-aiplatform-re.iam.gserviceaccount.com", "https://anemona-backend-fireabse--anemona-2130e.us-east4.hosted.app"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -28,6 +29,7 @@ app.include_router(login_router)
 app.include_router(datos_proyecto_route)
 app.include_router(firestore_router)
 app.include_router(widgets_router)
+app.include_router(arquitectura)
 app.include_router(
     agent_call,
     prefix="/agent",
@@ -50,4 +52,8 @@ def test_db():
         return {"conexion": "exitosa", "hora_db": str(fecha)}
     except Exception as e:
         return {"error": str(e)}
-    
+
+import uvicorn
+
+if __name__ == "__main__":
+    uvicorn.run("main:app", host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))

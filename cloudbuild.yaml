@@ -1,0 +1,10 @@
+steps:
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    args:
+      - gcloud
+      - run
+      - deploy
+      - api-anemona
+      - --source=.
+      - --region=northamerica-northeast1
+      - --allow-unauthenticated

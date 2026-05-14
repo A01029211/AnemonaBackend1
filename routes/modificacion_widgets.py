@@ -22,10 +22,18 @@ from typing import List
 app = FastAPI()
 FIRESTORE_PROJECT = os.getenv("FIRESTORE_PROJECT")
 COLLECTION = os.getenv("FIRESTORE_COLLECTION", "documentos")
-FIRESTORE_CREDENTIALS_PATH = os.getenv("GOOGLE_APPLICATION_CREDENTIALS_FIRESTORE")
-credentials = service_account.Credentials.from_service_account_file(
-    FIRESTORE_CREDENTIALS_PATH
-)
+import json
+
+##QUITAR PARA REMOTO, CREDIENCIALES ARRIBA SIRVE LOCAL, ABAJO REMOTO
+#FIRESTORE_CREDENTIALS_PATH = os.getenv("GOOGLE_APPLICATION_CREDENTIALS_FIRESTORE")
+#credentials = service_account.Credentials.from_service_account_file(
+#    FIRESTORE_CREDENTIALS_PATH
+#)
+FIRESTORE_CREDENTIALS_JSON = os.getenv("FIREBASE_CREDENTIALS")
+credentials_info = json.loads(FIRESTORE_CREDENTIALS_JSON)
+credentials = service_account.Credentials.from_service_account_info(credentials_info)
+##QUITAR PARA REMOTO
+
 _db = firestore.Client(
     project=FIRESTORE_PROJECT,
     credentials=credentials
@@ -36,6 +44,7 @@ class Widget(BaseModel):
     posicion: int
     id_widget: str
     titulo: str
+    objetivo_widget: str
     # descripción de cada campo (ej: {"nombre": "Nombre del usuario"})
     descripcion_campos: Dict[str, str]
     # valores de los campos (ej: {"nombre": "Darío"})
@@ -58,30 +67,72 @@ async def bajar_documento(doc_id: str):
 
 
 @router.post("/modificar/{doc_id}")
-async def crear_widgets(widgets: List[Widget], doc_id: str ):
+async def crear_widgets(widgets: List[Widget], doc_id: str):
     doc = await bajar_documento(doc_id)
-    
-    SKIP_FIELDS = {"posiciones", "nodos"}
-    
-    ids_recibidos = {w.id_widget for w in widgets}
-    
+
+    SKIP_FIELDS = {"nodos"}  # ya no existe "posiciones"
+
+    ids_recibidos = {str(w.posicion) for w in widgets}  # llave = posición
+
     nuevo_doc = {}
     for key in doc:
         if key in SKIP_FIELDS:
             continue
         if key in ids_recibidos:
             nuevo_doc[key] = doc[key]
-    
+
     for w in widgets:
-        nuevo_doc[w.id_widget] = {
+        nuevo_doc[str(w.posicion)] = {   # llave = posición, no id_widget
+            "id_widget": w.id_widget,    # id_widget se guarda como campo interno
             "titulo": w.titulo,
+            "objetivo_widget": w.objetivo_widget,
             "descripcion_campos": w.descripcion_campos,
             "campos": w.campos,
         }
-    
-    widgets_ordenados = sorted(widgets, key=lambda w: w.posicion)
-    nuevo_doc["posiciones"] = [w.id_widget for w in widgets_ordenados]
 
     _db.collection(COLLECTION).document(doc_id).set(nuevo_doc)
 
-    return {"orden": nuevo_doc["posiciones"], "widgets_guardados": list(nuevo_doc.keys())}
+    return {"widgets_guardados": list(nuevo_doc.keys())}
+
+
+@router.post("/widget")
+async def agregar_widget(widget: Widget):
+
+    widget_ref = _db.collection("widgets").document(widget.id_widget)
+
+    if widget_ref.get().exists:
+        raise HTTPException(
+            status_code=409,
+            detail=f"El widget '{widget.id_widget}' ya existe."
+        )
+
+    widget_ref.set(widget.model_dump())
+
+    return {
+        "mensaje": "Widget agregado correctamente.",
+        "id_widget": widget.id_widget,
+    }
+
+@router.post("/info_widgets")
+async def obtener_plantilla_widgets(ids: List[str]):
+    def _obtener():
+        resultado = []
+        no_encontrados = []
+
+        for id_widget in ids:
+            doc = _db.collection("widgets").document(id_widget).get()
+            if doc.exists:
+                resultado.append(doc.to_dict())
+            else:
+                no_encontrados.append(id_widget)
+
+        return resultado, no_encontrados
+
+    widgets, no_encontrados = await asyncio.to_thread(_obtener)
+
+    return {
+        "ok": True,
+        "total": len(widgets),
+        "widgets": widgets,
+        "no_encontrados": no_encontrados if no_encontrados else [],
+    }
