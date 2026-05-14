@@ -17,9 +17,13 @@ from google.cloud import firestore
 from google import genai
 from sqlalchemy.orm import Session
 
+from playwright.async_api import async_playwright
+
 from utils.auth import leer_token
 from database import get_db
 from models import Usuario
+
+FRONTEND_URL = "anemona-backend-fireabse--anemona-2130e.us-east4.hosted.app"
 
 router = APIRouter()
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
@@ -45,11 +49,21 @@ def _get_logo_base64() -> str:
         print(f"No se pudo descargar el logo: {e}")
         return BANORTE_LOGO_URL
 
+# ← NUEVO: descarga el logo y lo convierte a base64 para que no sea bloqueado
+def _get_logo_base64() -> str:
+    try:
+        req = urllib.request.Request(BANORTE_LOGO_URL, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=10) as response:
+            data = response.read()
+        return f"data:image/png;base64,{base64.b64encode(data).decode()}"
+    except Exception as e:
+        print(f"No se pudo descargar el logo: {e}")
+        return BANORTE_LOGO_URL
+
 
 # ── Model ─────────────────────────────────────────────────────────────────
 class SendEmailRequest(BaseModel):
     doc_id: str
-    pdf_base64: str | None = None
     user_name: str | None = None  # ← NUEVO: viene del frontend (localStorage)
 
 
@@ -269,7 +283,7 @@ def _build_html(campos: dict, summary: str, user_name: str, doc_id: str) -> str:
 """
 
 
-def _send_smtp(to_email: str, subject: str, html: str, pdf_base64: str | None = None):
+def _send_smtp(to_email: str, subject: str, html: str, pdf_bytes: bytes | None = None):
     msg = MIMEMultipart("mixed")
     msg["Subject"] = subject
     msg["From"]    = SMTP_USER
@@ -277,8 +291,7 @@ def _send_smtp(to_email: str, subject: str, html: str, pdf_base64: str | None = 
 
     msg.attach(MIMEText(html, "html", "utf-8"))
 
-    if pdf_base64:
-        pdf_bytes = base64.b64decode(pdf_base64)
+    if pdf_bytes:
         attachment = MIMEBase("application", "pdf")
         attachment.set_payload(pdf_bytes)
         encoders.encode_base64(attachment)
@@ -289,6 +302,48 @@ def _send_smtp(to_email: str, subject: str, html: str, pdf_base64: str | None = 
     with smtplib.SMTP_SSL("smtp.gmail.com", 465, context=context, timeout=15) as server:
         server.login(SMTP_USER, SMTP_PASSWORD)
         server.sendmail(SMTP_USER, to_email, msg.as_string())
+
+
+async def _generate_pdf_from_frontend(doc_id: str) -> bytes:
+    url = f"{FRONTEND_URL}/pdf-document?doc_id={doc_id}"
+
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(
+            headless=True,
+            args=["--no-sandbox", "--disable-setuid-sandbox"]
+        )
+
+        page = await browser.new_page(
+            viewport={"width": 1400, "height": 2000}
+        )
+
+        await page.goto(
+            url,
+            wait_until="networkidle",
+            timeout=60000
+        )
+
+        await page.wait_for_selector(
+            "[data-pdf-page]",
+            timeout=60000
+        )
+
+        pdf_bytes = await page.pdf(
+            width="816px",
+            height="1076px",
+            print_background=True,
+            prefer_css_page_size=True,
+            margin={
+                "top": "0px",
+                "right": "0px",
+                "bottom": "0px",
+                "left": "0px",
+            },
+        )
+
+        await browser.close()
+
+        return pdf_bytes
 
 
 # ── Endpoint ─────────────────────────────────────────────────────────────
@@ -323,7 +378,13 @@ async def send_srs_email(
         print("6. HTML listo. Enviando correo...")
         nombre_iniciativa = campos.get("NOMBRE_INICIATIVA", request.doc_id)
         subject = f"SRS · {nombre_iniciativa}"
-        _send_smtp(user_email, subject, html, request.pdf_base64)
+        pdf_bytes = await _generate_pdf_from_frontend(request.doc_id)
+        _send_smtp(
+            user_email,
+            subject,
+            html,
+            pdf_bytes
+        )
         print("7. Correo enviado OK")
 
         return {"ok": True, "message": f"Correo enviado a {user_email}"}
@@ -335,3 +396,5 @@ async def send_srs_email(
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
+    
+

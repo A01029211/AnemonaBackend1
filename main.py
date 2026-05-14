@@ -41,6 +41,8 @@ app.include_router(
     tags=["Email"]
 )
 
+app.include_router(arquitectura)
+
 @app.get("/test-db")
 def test_db():
     try:
