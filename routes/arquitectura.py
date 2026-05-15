@@ -47,7 +47,7 @@ _db = firestore.Client(
 # ── Configuración Vertex AI ──────────────────────────────────────────────────
 PROJECT_ID = "anemona-2130e"
 LOCATION = "us-central1"
-RESOURCE_ID = "4638079245296336896"
+RESOURCE_ID = "8795913252056858624"
 AGENT_RESOURCE_NAME = (
     f"projects/{PROJECT_ID}/locations/{LOCATION}/reasoningEngines/{RESOURCE_ID}"
 )
@@ -151,55 +151,40 @@ def _extract_text(chunk: Any) -> str:
 
 
 # ── Tarea background ─────────────────────────────────────────────────────────
-async def _ejecutar_agente(session_id: str, doc_id: str) -> None:
-    """
-    Ejecuta el agente de arquitectura en background.
-    - Actualiza el state de la sesión con el doc_id antes de lanzar el query.
-    - Hace skip silencioso si el agente falla o retorna "skipped".
-    - Loguea errores sin propagar excepciones (es background task).
-    """
-    logger.info(f"[arq-bg] Iniciando — session={session_id} | doc={doc_id}")
+async def _ejecutar_agente(doc_id: str) -> None:
+    logger.info(f"[arq-bg] Iniciando — doc={doc_id}")
 
     try:
-        # ── 1. Garantizar que el state tenga el doc_id actualizado ──────────
-        # Esto es crítico: el agente lee doc_id del state, no del mensaje.
-        try:
-            await remote_app.async_update_session(
-                session_id=session_id,
-                state={"doc_id": doc_id},
-            )
-            logger.info(f"[arq-bg] State actualizado con doc_id={doc_id}")
-        except Exception as e:
-            # async_update_session puede no existir en todas las versiones del SDK.
-            # Si falla, intentamos igual — el state pudo haberse seteado al crear la sesión.
-            logger.warning(
-                f"[arq-bg] No se pudo actualizar state explícitamente: {e}. "
-                "Continuando — el doc_id debe estar en el state de creación."
-            )
-
-        # ── 2. Lanzar el agente ──────────────────────────────────────────────
-        # El mensaje es solo un trigger; el doc_id viene del session state.
-        stream = remote_app.async_stream_query(
-            session_id=session_id,
-            message="genera la arquitectura",
+        # 1. Sesión efímera
+        remote_session = await remote_app.async_create_session(
+            user_id="arquitectura-agent",
+            state={"doc_id": doc_id},
         )
+        ephemeral_session_id = remote_session["id"]
+        logger.info(f"[arq-bg] Sesión creada — {ephemeral_session_id}")
 
-        logger.info(f"[arq-bg] Stream tipo: {type(stream).__name__}")
+        # 2. stream_query síncrono en thread
+        def _run():
+            chunks = []
+            for chunk in remote_app.stream_query(
+                message=f"doc_id={doc_id}",
+                session_id=ephemeral_session_id,
+                user_id="arquitectura-agent"
+            ):
+                chunks.append(str(chunk))
+            return "\n".join(chunks)
 
-        result_text = await _drain_stream(stream)
+        response = await asyncio.to_thread(_run)
+        logger.info(f"[arq-bg] Respuesta: {response[:200]!r}")
 
-        logger.info(f"[arq-bg] Respuesta del agente: {result_text[:200]!r}")
-
-        if "skipped" in result_text.lower():
-            logger.info(f"[arq-bg] El agente hizo skip — doc={doc_id}")
-        else:
-            logger.info(f"[arq-bg] Agente terminó OK — doc={doc_id}")
+        # 3. Borrar sesión efímera
+        await remote_app.async_delete_session(session_id=ephemeral_session_id, user_id="arquitectura-agent")
+        logger.info(f"[arq-bg] Sesión eliminada — {ephemeral_session_id}")
 
     except Exception as e:
         traceback.print_exc()
-        logger.error(f"[arq-bg] Error fatal — session={session_id} doc={doc_id}: {e}")
-        # No re-lanzamos: es background task, no hay quién maneje la excepción.
-
+        logger.error(f"[arq-bg] Error fatal — doc={doc_id}: {e}")
+    
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 @router.post("/subir")
@@ -245,17 +230,14 @@ async def obtener_arquitectura(doc_id: str):
 
 @router.post("/generar-arquitectura")
 async def generar_arquitectura(
-    session_id: str,
     doc_id: str,
     background_tasks: BackgroundTasks,
 ):
-    if not session_id:
-        raise HTTPException(status_code=400, detail="session_id requerido")
     if not doc_id:
         raise HTTPException(status_code=400, detail="doc_id requerido")
 
-    logger.info(f"[arq] Encolando agente — session={session_id} | doc={doc_id}")
-    background_tasks.add_task(_ejecutar_agente, session_id, doc_id)
+    logger.info(f"[arq] Encolando agente — doc={doc_id}")
+    background_tasks.add_task(_ejecutar_agente, doc_id)
 
     return {"ok": True, "mensaje": "Generando arquitectura en segundo plano…"}
 
