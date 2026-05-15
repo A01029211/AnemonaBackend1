@@ -342,6 +342,7 @@ async def _generate_pdf_from_frontend(doc_id: str) -> bytes:
 
         await page.wait_for_selector(
             "[data-pdf-page]",
+            state="attached",
             timeout=60000
         )
 
