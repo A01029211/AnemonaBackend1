@@ -48,7 +48,7 @@ class QueryResponse(BaseModel):
 @router.get("/health")
 async def health_check():
     """Health check endpoint"""
-    return {"status": "healthy"}
+    return {"status": "healthy 100%"}
 
 
 @router.post("/sessions", response_model=CreateSessionResponse)
