@@ -24,7 +24,7 @@ from utils.auth import leer_token
 from database import get_db
 from models import Usuario
 
-FRONTEND_URL = "anemona-backend-fireabse--anemona-2130e.us-east4.hosted.app"
+FRONTEND_URL = "https://anemona-backend-fireabse--anemona-2130e.us-east4.hosted.app"
 
 router = APIRouter()
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
