@@ -12,6 +12,7 @@ from email import encoders
 
 from fastapi import APIRouter, HTTPException, Depends
 from fastapi.security import OAuth2PasswordBearer
+from google.oauth2 import service_account
 from pydantic import BaseModel
 from google.cloud import firestore
 from google import genai
@@ -28,9 +29,23 @@ FRONTEND_URL = "anemona-backend-fireabse--anemona-2130e.us-east4.hosted.app"
 router = APIRouter()
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 
-FIRESTORE_PROJECT = "anemona-2130e"
-COLLECTION        = "srs_anemona"
-_db = firestore.Client(project=FIRESTORE_PROJECT)
+FIRESTORE_PROJECT = os.getenv("FIRESTORE_PROJECT")
+COLLECTION = os.getenv("FIRESTORE_COLLECTION", "srs_anemona")
+
+##QUITAR PARA REMOTO, CREDIENCIALES ARRIBA SIRVE LOCAL, ABAJO REMOTO
+#FIRESTORE_CREDENTIALS_PATH = os.getenv("GOOGLE_APPLICATION_CREDENTIALS_FIRESTORE")
+#credentials = service_account.Credentials.from_service_account_file(
+#    FIRESTORE_CREDENTIALS_PATH
+#)
+FIRESTORE_CREDENTIALS_JSON = os.getenv("FIREBASE_CREDENTIALS")
+credentials_info = json.loads(FIRESTORE_CREDENTIALS_JSON)
+credentials = service_account.Credentials.from_service_account_info(credentials_info)
+##QUITAR PARA REMOTO
+
+_db = firestore.Client(
+    project=FIRESTORE_PROJECT,
+    credentials=credentials
+)
 
 SMTP_USER     = os.environ["SMTP_USER"]
 SMTP_PASSWORD = os.environ["SMTP_PASSWORD"]
