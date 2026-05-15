@@ -95,20 +95,35 @@ def _get_srs_data(doc_id: str) -> dict:
 def _extract_campos(srs_data: dict) -> dict:
     campos = {}
 
+    # Caso 1: widgets listados en posiciones
     for wid in srs_data.get("posiciones", []):
-        widget_data = srs_data.get(wid, {})
-        campos.update(widget_data.get("campos", {}))
+        widget_data = srs_data.get(str(wid), srs_data.get(wid, {}))
+        if isinstance(widget_data, dict):
+            campos.update(widget_data.get("campos", {}))
 
-    if not campos:
-        datos_generales = srs_data.get("DATOS_GENERALES", {})
-        if datos_generales:
-            campos.update(datos_generales)
+    # Caso 2: widgets guardados como "0", "1", "2", etc.
+    for key, widget_data in srs_data.items():
+        if isinstance(widget_data, dict) and "campos" in widget_data:
+            campos.update(widget_data.get("campos", {}))
 
-    if not campos:
-        for key in ["NOMBRE_INICIATIVA", "SOLICITANTE", "TIPO_INICIATIVA",
-                    "PATROCINADOR", "SOCIO", "INFO_CONTACTO", "DGA", "CR"]:
-            if key in srs_data:
-                campos[key] = srs_data[key]
+    # Caso 3: DATOS_GENERALES
+    datos_generales = srs_data.get("DATOS_GENERALES", {})
+    if isinstance(datos_generales, dict):
+        campos.update(datos_generales)
+
+    # Caso 4: campos directos
+    for key in [
+        "NOMBRE_INICIATIVA",
+        "SOLICITANTE",
+        "TIPO_INICIATIVA",
+        "PATROCINADOR",
+        "SOCIO",
+        "INFO_CONTACTO",
+        "DGA",
+        "CR",
+    ]:
+        if key in srs_data and srs_data[key] not in [None, ""]:
+            campos[key] = srs_data[key]
 
     print(f"Campos extraídos: {campos}")
     return campos
