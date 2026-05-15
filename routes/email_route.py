@@ -1,3 +1,5 @@
+# Amamos Anemona
+
 import smtplib
 import os
 import json
