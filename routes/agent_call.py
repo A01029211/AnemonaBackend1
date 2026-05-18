@@ -8,7 +8,7 @@ import json
 # Configuration
 PROJECT_ID = "anemona-2130e"
 LOCATION = "us-central1"
-RESOURCE_ID = "8497127564278497280"
+RESOURCE_ID = "280274859768938496"
                
 AGENT_RESOURCE_NAME = f"projects/{PROJECT_ID}/locations/{LOCATION}/reasoningEngines/{RESOURCE_ID}"
 
