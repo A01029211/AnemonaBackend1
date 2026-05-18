@@ -284,8 +284,7 @@ def _render_w005(doc, widget: dict):
         _spacer(doc)
         return
 
-    max_cols = max((len(f.get("celdas", [])) for f in filas), default=1)
-
+    max_cols = 4
     tbl = doc.add_table(rows=len(filas), cols=max_cols)
     tbl.style = "Table Grid"
     tbl.alignment = WD_TABLE_ALIGNMENT.LEFT
@@ -294,46 +293,40 @@ def _render_w005(doc, widget: dict):
         celdas = fila.get("celdas", [])
         row = tbl.rows[ri]
 
-        # Si la fila solo tiene una celda, se combina toda la fila
-        if len(celdas) == 1 and max_cols > 1:
-            cell = row.cells[0].merge(row.cells[-1])
+        # 1 celda: ocupa toda la fila
+        if len(celdas) == 1:
+            cell = row.cells[0].merge(row.cells[3])
             cel = celdas[0]
+            texto = _val(cel.get("valor", "")) or _val(cel.get("label", ""))
+            bold = bool(cel.get("bold", False))
 
-            label = _val(cel.get("label", ""))
-            valor = _val(cel.get("valor", ""))
-            bold  = bool(cel.get("bold", False))
-
-            texto = valor or label
-
-            p = cell.paragraphs[0]
-            r = p.add_run(texto)
+            r = cell.paragraphs[0].add_run(texto)
             _font(r, 11, bold=bold)
+            continue
+
+        # 2 celdas: cada celda ocupa 2 columnas
+        if len(celdas) == 2:
+            grupos = [
+                row.cells[0].merge(row.cells[1]),
+                row.cells[2].merge(row.cells[3]),
+            ]
+
+            for ci, cel in enumerate(celdas):
+                texto = _val(cel.get("valor", "")) or _val(cel.get("label", ""))
+                bold = bool(cel.get("bold", False))
+                r = grupos[ci].paragraphs[0].add_run(texto)
+                _font(r, 11, bold=bold, color=GRIS_LABEL if not bold else None)
 
             continue
 
-        # Filas normales con varias columnas
-        for ci in range(max_cols):
-            cell = row.cells[ci]
+        # 4 celdas normales
+        for ci in range(min(len(celdas), 4)):
+            cel = celdas[ci]
+            texto = _val(cel.get("valor", "")) or _val(cel.get("label", ""))
+            bold = bool(cel.get("bold", False))
 
-            if ci >= len(celdas):
-                continue
-
-            cel   = celdas[ci]
-            label = _val(cel.get("label", ""))
-            valor = _val(cel.get("valor", ""))
-            bold  = bool(cel.get("bold", False))
-
-            if label and valor:
-                rl = cell.paragraphs[0].add_run(label)
-                _font(rl, 9, color=GRIS_LABEL)
-
-                rv = cell.add_paragraph().add_run(valor)
-                _font(rv, 11, bold=bold)
-
-            else:
-                texto = valor or label
-                r = cell.paragraphs[0].add_run(texto)
-                _font(r, 11, bold=bold, color=GRIS_LABEL if not bold else None)
+            r = row.cells[ci].paragraphs[0].add_run(texto)
+            _font(r, 11, bold=bold, color=GRIS_LABEL if not bold else None)
 
     _spacer(doc)
 
