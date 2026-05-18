@@ -367,11 +367,55 @@ def _add_header(doc):
     sec    = doc.sections[0]
     header = sec.header
     header.is_linked_to_previous = False
-    p = header.paragraphs[0] if header.paragraphs else header.add_paragraph()
-    p.clear()
-    p.paragraph_format.space_before = Pt(0)
-    p.paragraph_format.space_after  = Pt(0)
-    pPr  = p._p.get_or_add_pPr()
+
+    # Limpiar párrafo default
+    for p in header.paragraphs:
+        p.clear()
+
+    # Tabla de 2 celdas: texto | imagen
+    tbl = header.add_table(rows=1, cols=2, width=Inches(6.5))
+    tbl.alignment = WD_TABLE_ALIGNMENT.LEFT
+
+    # Celda izquierda — texto
+    cell_left  = tbl.cell(0, 0)
+    cell_right = tbl.cell(0, 1)
+
+    cell_left.width  = Inches(3.5)
+    cell_right.width = Inches(3.0)
+
+    # Sin bordes en la tabla
+    for cell in [cell_left, cell_right]:
+        tc   = cell._tc
+        tcPr = tc.get_or_add_tcPr()
+        tcBdr = OxmlElement("w:tcBdr")
+        for side in ["top", "left", "bottom", "right"]:
+            border = OxmlElement(f"w:{side}")
+            border.set(qn("w:val"), "none")
+            tcBdr.append(border)
+        tcPr.append(tcBdr)
+
+    p_left = cell_left.paragraphs[0]
+    p_left.paragraph_format.space_before = Pt(0)
+    p_left.paragraph_format.space_after  = Pt(0)
+    r1 = p_left.add_run("Formato Estándar | ")
+    _font(r1, 11, bold=True, color=GRIS_LABEL)
+    r2 = p_left.add_run("Levantamiento de Requerimiento")
+    _font(r2, 11, color=GRIS_LABEL)
+
+    # Celda derecha — imagen alineada a la derecha
+    p_right = cell_right.paragraphs[0]
+    p_right.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+    p_right.paragraph_format.space_before = Pt(0)
+    p_right.paragraph_format.space_after  = Pt(0)
+    if os.path.exists(_IMG_RAYA):
+        r_img = p_right.add_run()
+        r_img.add_picture(_IMG_RAYA, width=Inches(2.8), height=Inches(0.4))
+
+    # Borde inferior debajo de la tabla
+    p_after = header.add_paragraph()
+    p_after.paragraph_format.space_before = Pt(2)
+    p_after.paragraph_format.space_after  = Pt(0)
+    pPr  = p_after._p.get_or_add_pPr()
     pBdr = OxmlElement("w:pBdr")
     bot  = OxmlElement("w:bottom")
     bot.set(qn("w:val"),   "single")
@@ -380,28 +424,6 @@ def _add_header(doc):
     bot.set(qn("w:color"), "b9a89f")
     pBdr.append(bot)
     pPr.append(pBdr)
-    r1 = p.add_run("Formato Estándar | ")
-    _font(r1, 14, bold=True, color=GRIS_LABEL)
-    r2 = p.add_run("Levantamiento de Requerimiento")
-    _font(r2, 14, color=GRIS_LABEL)
-
-    # Imagen rayaNegra a la derecha — solo si existe el archivo
-    if os.path.exists(_IMG_RAYA):
-        # Tab para empujar la imagen a la derecha
-        r_tab = p.add_run("\t")
-        _font(r_tab, 14)
-        r_img = p.add_run()
-        r_img.add_picture(_IMG_RAYA, width=Inches(3.2), height=Inches(0.45))
-
-        # Alineación de tab al centro/derecha
-        pPr2 = p._p.get_or_add_pPr()
-        tabs = OxmlElement("w:tabs")
-        tab  = OxmlElement("w:tab")
-        tab.set(qn("w:val"), "right")
-        tab.set(qn("w:pos"), "9360")  # margen derecho en twips
-        tabs.append(tab)
-        pPr2.append(tabs)
-
 
 def _add_footer(doc):
     sec    = doc.sections[0]
@@ -414,14 +436,12 @@ def _add_footer(doc):
     p.paragraph_format.space_after  = Pt(0)
     p.alignment = WD_ALIGN_PARAGRAPH.LEFT
 
-    # Sangría negativa para que la imagen salga hasta las orillas
-    p.paragraph_format.left_indent  = Inches(-1)
-    p.paragraph_format.right_indent = Inches(-1)
+
 
     if os.path.exists(_IMG_FOOTER):
         r_img = p.add_run()
         # 8.5" = ancho total de la página incluyendo márgenes
-        r_img.add_picture(_IMG_FOOTER, width=Inches(8.5))
+        r_img.add_picture(_IMG_FOOTER, height=Inches(0.6))
     else:
         r = p.add_run("Banorte")
         _font(r, 11, bold=True, color=ROJO_BANORTE)
