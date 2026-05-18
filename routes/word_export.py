@@ -391,7 +391,7 @@ def _add_header(doc):
         r_tab = p.add_run("\t")
         _font(r_tab, 14)
         r_img = p.add_run()
-        r_img.add_picture(_IMG_RAYA, height=Inches(0.45))
+        r_img.add_picture(_IMG_RAYA, width=Inches(3.2), height=Inches(0.45))
 
         # Alineación de tab al centro/derecha
         pPr2 = p._p.get_or_add_pPr()
@@ -407,17 +407,22 @@ def _add_footer(doc):
     sec    = doc.sections[0]
     footer = sec.footer
     footer.is_linked_to_previous = False
- 
+
     p = footer.paragraphs[0] if footer.paragraphs else footer.add_paragraph()
     p.clear()
     p.paragraph_format.space_before = Pt(0)
     p.paragraph_format.space_after  = Pt(0)
- 
+    p.alignment = WD_ALIGN_PARAGRAPH.LEFT
+
+    # Sangría negativa para que la imagen salga hasta las orillas
+    p.paragraph_format.left_indent  = Inches(-1)
+    p.paragraph_format.right_indent = Inches(-1)
+
     if os.path.exists(_IMG_FOOTER):
         r_img = p.add_run()
-        r_img.add_picture(_IMG_FOOTER, height=Inches(0.6))
+        # 8.5" = ancho total de la página incluyendo márgenes
+        r_img.add_picture(_IMG_FOOTER, width=Inches(8.5))
     else:
-        # Fallback si no encuentra la imagen
         r = p.add_run("Banorte")
         _font(r, 11, bold=True, color=ROJO_BANORTE)
 
@@ -470,7 +475,7 @@ def generar_word_srs(widgets: list[dict]) -> bytes:
     doc = Document()
 
     sec               = doc.sections[0]
-    sec.page_width    = Inches(8.5)
+    sec.page_width    = Inches(7)
     sec.page_height   = Inches(11)
     sec.left_margin   = Inches(1)
     sec.right_margin  = Inches(1)
