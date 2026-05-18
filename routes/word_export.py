@@ -11,6 +11,7 @@ Robustez ante datos reales de Firestore:
 """
 
 import io
+import os
 from typing import Any
 
 from docx import Document
@@ -359,6 +360,9 @@ def _render_wchart(doc, widget: dict):
 
 # ─── Header / Footer ─────────────────────────────────────────────────────────
 
+_IMG_RAYA   = "public/images/rayaNegra.png"
+_IMG_FOOTER = "public/images/banortegf.png"
+
 def _add_header(doc):
     sec    = doc.sections[0]
     header = sec.header
@@ -381,15 +385,41 @@ def _add_header(doc):
     r2 = p.add_run("Levantamiento de Requerimiento")
     _font(r2, 14, color=GRIS_LABEL)
 
+    # Imagen rayaNegra a la derecha — solo si existe el archivo
+    if os.path.exists(_IMG_RAYA):
+        # Tab para empujar la imagen a la derecha
+        r_tab = p.add_run("\t")
+        _font(r_tab, 14)
+        r_img = p.add_run()
+        r_img.add_picture(_IMG_RAYA, height=Inches(0.45))
+
+        # Alineación de tab al centro/derecha
+        pPr2 = p._p.get_or_add_pPr()
+        tabs = OxmlElement("w:tabs")
+        tab  = OxmlElement("w:tab")
+        tab.set(qn("w:val"), "right")
+        tab.set(qn("w:pos"), "9360")  # margen derecho en twips
+        tabs.append(tab)
+        pPr2.append(tabs)
+
 
 def _add_footer(doc):
     sec    = doc.sections[0]
     footer = sec.footer
     footer.is_linked_to_previous = False
+ 
     p = footer.paragraphs[0] if footer.paragraphs else footer.add_paragraph()
     p.clear()
-    r = p.add_run("Banorte")
-    _font(r, 11, bold=True, color=ROJO_BANORTE)
+    p.paragraph_format.space_before = Pt(0)
+    p.paragraph_format.space_after  = Pt(0)
+ 
+    if os.path.exists(_IMG_FOOTER):
+        r_img = p.add_run()
+        r_img.add_picture(_IMG_FOOTER, height=Inches(0.6))
+    else:
+        # Fallback si no encuentra la imagen
+        r = p.add_run("Banorte")
+        _font(r, 11, bold=True, color=ROJO_BANORTE)
 
 
 # ─── FastAPI ─────────────────────────────────────────────────────────────────
