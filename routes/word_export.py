@@ -285,33 +285,57 @@ def _render_w005(doc, widget: dict):
         return
 
     max_cols = max((len(f.get("celdas", [])) for f in filas), default=1)
+
     tbl = doc.add_table(rows=len(filas), cols=max_cols)
-    tbl.style     = "Table Grid"
+    tbl.style = "Table Grid"
     tbl.alignment = WD_TABLE_ALIGNMENT.LEFT
 
     for ri, fila in enumerate(filas):
         celdas = fila.get("celdas", [])
-        row    = tbl.rows[ri]
+        row = tbl.rows[ri]
+
+        # Si la fila solo tiene una celda, se combina toda la fila
+        if len(celdas) == 1 and max_cols > 1:
+            cell = row.cells[0].merge(row.cells[-1])
+            cel = celdas[0]
+
+            label = _val(cel.get("label", ""))
+            valor = _val(cel.get("valor", ""))
+            bold  = bool(cel.get("bold", False))
+
+            texto = valor or label
+
+            p = cell.paragraphs[0]
+            r = p.add_run(texto)
+            _font(r, 11, bold=bold)
+
+            continue
+
+        # Filas normales con varias columnas
         for ci in range(max_cols):
             cell = row.cells[ci]
+
             if ci >= len(celdas):
                 continue
+
             cel   = celdas[ci]
             label = _val(cel.get("label", ""))
             valor = _val(cel.get("valor", ""))
             bold  = bool(cel.get("bold", False))
 
-            if label:
+            if label and valor:
                 rl = cell.paragraphs[0].add_run(label)
                 _font(rl, 9, color=GRIS_LABEL)
+
                 rv = cell.add_paragraph().add_run(valor)
                 _font(rv, 11, bold=bold)
+
             else:
-                rv = cell.paragraphs[0].add_run(valor)
-                _font(rv, 11, bold=bold)
+                texto = valor or label
+                r = cell.paragraphs[0].add_run(texto)
+                _font(r, 11, bold=bold, color=GRIS_LABEL if not bold else None)
 
     _spacer(doc)
-
 
 # ─── W004 / WChart ───────────────────────────────────────────────────────────
 
