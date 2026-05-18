@@ -430,22 +430,33 @@ def _add_footer(doc):
     footer = sec.footer
     footer.is_linked_to_previous = False
 
-    p = footer.paragraphs[0] if footer.paragraphs else footer.add_paragraph()
-    p.clear()
-    p.paragraph_format.space_before = Pt(0)
-    p.paragraph_format.space_after  = Pt(0)
-    p.alignment = WD_ALIGN_PARAGRAPH.LEFT
+    for p in footer.paragraphs:
+        p.clear()
 
+    tbl = footer.add_table(rows=1, cols=1, width=Inches(3.5))
+    tbl.alignment = WD_TABLE_ALIGNMENT.LEFT
 
+    # Mover tabla a la orilla izquierda
+    tblPr = tbl._tbl.get_or_add_tblPr()
+    tblInd = OxmlElement("w:tblInd")
+    tblInd.set(qn("w:w"), "-1000")   # negativo para salir al margen izquierdo
+    tblInd.set(qn("w:type"), "dxa")
+    tblPr.append(tblInd)
+
+    cell = tbl.cell(0, 0)
+    cell.width = Inches(3.5)
+    _cell_bg(cell, "3B3535")
+
+    p = cell.paragraphs[0]
+    p.paragraph_format.space_before = Pt(2)   # sube/baja la imagen dentro de la celda
+    p.paragraph_format.space_after  = Pt(2)
 
     if os.path.exists(_IMG_FOOTER):
         r_img = p.add_run()
-        # 8.5" = ancho total de la página incluyendo márgenes
-        r_img.add_picture(_IMG_FOOTER, height=Inches(0.6))
+        r_img.add_picture(_IMG_FOOTER, height=Inches(0.30))
     else:
-        r = p.add_run("Banorte")
-        _font(r, 11, bold=True, color=ROJO_BANORTE)
-
+        r = p.add_run("GRUPO FINANCIERO BANORTE")
+        _font(r, 11, bold=True, color=BLANCO)
 
 # ─── FastAPI ─────────────────────────────────────────────────────────────────
 
