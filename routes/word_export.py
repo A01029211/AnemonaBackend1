@@ -436,10 +436,13 @@ def _add_footer(doc):
     tbl = footer.add_table(rows=1, cols=1, width=Inches(3.5))
     tbl.alignment = WD_TABLE_ALIGNMENT.LEFT
 
-    # Mover tabla a la orilla izquierda
-    tblPr = tbl._tbl.get_or_add_tblPr()
+    tblPr = tbl._tbl.tblPr
+    if tblPr is None:
+        tblPr = OxmlElement("w:tblPr")
+        tbl._tbl.insert(0, tblPr)
+
     tblInd = OxmlElement("w:tblInd")
-    tblInd.set(qn("w:w"), "-1000")   # negativo para salir al margen izquierdo
+    tblInd.set(qn("w:w"), "-1000")
     tblInd.set(qn("w:type"), "dxa")
     tblPr.append(tblInd)
 
@@ -448,7 +451,7 @@ def _add_footer(doc):
     _cell_bg(cell, "3B3535")
 
     p = cell.paragraphs[0]
-    p.paragraph_format.space_before = Pt(2)   # sube/baja la imagen dentro de la celda
+    p.paragraph_format.space_before = Pt(2)
     p.paragraph_format.space_after  = Pt(2)
 
     if os.path.exists(_IMG_FOOTER):
@@ -457,7 +460,7 @@ def _add_footer(doc):
     else:
         r = p.add_run("GRUPO FINANCIERO BANORTE")
         _font(r, 11, bold=True, color=BLANCO)
-
+        
 # ─── FastAPI ─────────────────────────────────────────────────────────────────
 
 from fastapi import APIRouter
