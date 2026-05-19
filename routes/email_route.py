@@ -19,12 +19,15 @@ from pydantic import BaseModel
 from google.cloud import firestore
 from google import genai
 from sqlalchemy.orm import Session
+from dotenv import load_dotenv
 
 from playwright.async_api import async_playwright
 
 from utils.auth import leer_token
 from database import get_db
 from models import Usuario
+
+load_dotenv()
 
 FRONTEND_URL = "https://anemona-backend-fireabse--anemona-2130e.us-east4.hosted.app"
 
@@ -44,10 +47,15 @@ credentials_info = json.loads(FIRESTORE_CREDENTIALS_JSON)
 credentials = service_account.Credentials.from_service_account_info(credentials_info)
 ##QUITAR PARA REMOTO
 
+
 _db = firestore.Client(
     project=FIRESTORE_PROJECT,
     credentials=credentials
 )
+
+PROJECT_ID = "anemona-2130e"
+LOCATION = "us-central1"
+RESOURCE_ID = "5927788792491540480"
 
 SMTP_USER     = os.environ["SMTP_USER"]
 SMTP_PASSWORD = os.environ["SMTP_PASSWORD"]

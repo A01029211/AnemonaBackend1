@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Header
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -63,4 +63,22 @@ def obtener_mi_info(token: str = Depends(oauth2_scheme), db: Session = Depends(g
         "activo":             usuario.activo,
         "iddepartamento":     usuario.iddepartamento,
         "idrol":              usuario.idrol
+    }
+
+
+@router.get("/auth/verify-token")
+def verify_token(authorization: str = Header(None)):
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Token faltante")
+
+    token = authorization.replace("Bearer ", "")
+
+    usuario = leer_token(token)
+
+    if usuario is None:
+        raise HTTPException(status_code=401, detail="Token inválido o expirado")
+
+    return {
+        "valid": True,
+        "usuario": usuario
     }
