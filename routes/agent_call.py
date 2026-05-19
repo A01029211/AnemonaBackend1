@@ -159,3 +159,77 @@ async def query_agent_stream(request: QueryRequest):
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+class HistoryResponse(BaseModel):
+    session_id: str
+    user_id: str
+    events: list
+
+
+@router.get("/sessions/{session_id}/history", response_model=HistoryResponse)
+async def get_session_history(session_id: str, user_id: str):
+    """
+    OBTENER HISTORIAL COMPLETO DE UNA SESIÓN
+    """
+
+    try:
+        remote_app = agent_engines.get(AGENT_RESOURCE_NAME)
+
+        # Obtiene la sesión completa desde Vertex
+        session = await remote_app.async_get_session(
+            user_id=user_id,
+            session_id=session_id,
+            
+        )
+
+       
+
+        # Algunos SDKs regresan `events`
+        events = session.get("events", [])
+
+        parsed_events = []
+
+        for event in events:
+
+            content = event.get("content", {})
+            role = content.get("role", "")
+            parts = content.get("parts", [])
+
+            parsed_parts = []
+
+            for part in parts:
+
+                if "text" in part:
+                    parsed_parts.append({
+                        "type": "text",
+                        "text": part["text"]
+                    })
+
+                elif "function_call" in part:
+                    parsed_parts.append({
+                        "type": "tool_call",
+                        "tool": part["function_call"].get("name"),
+                        "args": part["function_call"].get("args"),
+                    })
+
+                elif "function_response" in part:
+                    parsed_parts.append({
+                        "type": "tool_response",
+                        "tool": part["function_response"].get("name"),
+                        "response": part["function_response"].get("response"),
+                    })
+
+            parsed_events.append({
+                "author": role,
+                "parts": parsed_parts,
+                "timestamp": event.get("timestamp"),
+            })
+
+        return HistoryResponse(
+            session_id=session_id,
+            user_id=user_id,
+            events=parsed_events,
+        )
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
