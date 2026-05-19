@@ -2,9 +2,10 @@ from datetime import datetime, timedelta
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 
+
 SECRET_KEY = "mi-clave-secreta-123"
 ALGORITHM = "HS256"
-MINUTOS_EXPIRACION = 30
+MINUTOS_EXPIRACION = 240
 
 pwd_context = CryptContext(schemes=["bcrypt"])
 
@@ -36,3 +37,5 @@ def leer_token(token: str) -> str:
         }
     except JWTError:
         return None
+    
+ 
