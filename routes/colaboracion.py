@@ -3,10 +3,11 @@
 import asyncio
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException
-from requests import Session
+from sqlalchemy.orm import Session
+from pydantic import BaseModel
 
 from database import get_db
-from models import SessionChat, Usuario
+from models import SessionChat, Usuario, Proyecto
 from routes.firestore_srs import EliminarColaboradorPayload
 
 
@@ -119,3 +120,72 @@ async def eliminar_colaborador(
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Error al eliminar colaborador: {str(e)}")
+    
+    
+# Obtener todos los colaboradores de un proyecto
+@router.get("/{folio}/obtener-colaboradores")
+def obtener_colaboradores(folio: int, db: Session = Depends(get_db)):
+    sesiones = db.query(SessionChat).filter(SessionChat.folio == folio).all()
+
+    if not sesiones:
+        raise HTTPException(status_code=404, detail="Proyecto no encontrado o sin sesiones")
+
+    idusuarios = [s.idusuario for s in sesiones]
+    usuarios = db.query(Usuario).filter(Usuario.idusuario.in_(idusuarios)).all()
+    usuarios_map = {u.idusuario: u for u in usuarios}
+
+    def formatear_usuario(s):
+        u = usuarios_map.get(s.idusuario)
+        return {
+            "idusuario": s.idusuario,
+            "nombre": f"{u.nombre} {u.apellidopaterno}" if u else None,
+            "correo": u.correo if u else None,
+            "session_id": s.session_id,
+        }
+
+    owner = next((s for s in sesiones if s.permiso == "OWNER"), None)
+    colaboradores = [s for s in sesiones if s.permiso == "COLAB"]
+
+    return {
+        "folio": folio,
+        "owner": formatear_usuario(owner) if owner else None,
+        "colaboradores": [formatear_usuario(s) for s in colaboradores],
+        "total_colaboradores": len(colaboradores)
+    }
+    
+# Endpoint para cambiar el nombre del proyecto
+class RenombrarProyectoPayload(BaseModel):
+    nombreproyecto: str
+
+@router.patch("/{folio}/renombrar-proyecto")
+def renombrar_proyecto(
+    folio: int,
+    payload: RenombrarProyectoPayload,
+    db: Session = Depends(get_db)
+):
+    proyecto = db.query(Proyecto).filter(Proyecto.folio == folio).first()
+
+    if not proyecto:
+        raise HTTPException(status_code=404, detail="Proyecto no encontrado")
+
+    nombre_anterior = proyecto.nombreproyecto
+    proyecto.nombreproyecto = payload.nombreproyecto.strip()
+    proyecto.fechaactualizacion = datetime.now()
+
+    try:
+        db.commit()
+        db.refresh(proyecto)
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=f"No se pudo renombrar el proyecto: {str(e)}"
+        )
+
+    return {
+        "ok": True,
+        "folio": proyecto.folio,
+        "nombre_anterior": nombre_anterior,
+        "nombreproyecto": proyecto.nombreproyecto,
+        "fechaactualizacion": proyecto.fechaactualizacion.isoformat()
+    }
