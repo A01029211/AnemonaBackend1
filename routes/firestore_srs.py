@@ -357,30 +357,7 @@ async def new_colab(correo: str, folio: int, db: Session = Depends(get_db)):
             "ok": True,
             "ya_existia": ya_existia,
             "mensaje": "El colaborador ya tenía una sesión activa" if ya_existia else "Sesión de colaborador creada correctamente",
-            "folio": folio,
-            "session_id": result_session.session_id,
-            "id_usuario": usuario.idusuario,
-            "usuario": {
-                "idusuario":       usuario.idusuario,
-                "nombre":          usuario.nombre,
-                "apellidopaterno": usuario.apellidopaterno,
-                "apellidomaterno": usuario.apellidomaterno,
-                "correo":          usuario.correo,
-                "ultimoacceso":    usuario.ultimoacceso,
-                "activo":          usuario.activo,
-                "iddepartamento":  usuario.iddepartamento,
-                "idrol":           usuario.idrol,
-            },
-            "session": {
-                "session_id":            result_session.session_id,
-                "folio":                 result_session.folio,
-                "idusuario":             result_session.idusuario,
-                "fecha_inicio":          result_session.fecha_inicio,
-                "fecha_conclusion":      result_session.fecha_conclusion,
-                "id_firestore_document": result_session.id_firestore_document,
-                "permiso":               result_session.permiso,
-                "id_owner":              result_session.id_owner,
-            }
+            
         }
 
     except HTTPException:
