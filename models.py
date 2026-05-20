@@ -72,6 +72,7 @@ class Mensaje(Base):
     fecha_creacion = Column(TIMESTAMP, server_default=func.now())
     folio = Column(Integer, ForeignKey("proyecto.folio"))
     id_session = Column(Integer, ForeignKey("session_chat.id_session"))
+    
 
 
 class SessionChat(Base):
@@ -85,3 +86,6 @@ class SessionChat(Base):
     fecha_inicio = Column(TIMESTAMP, server_default=func.now())
     id_firestore_document = Column(String(50))
     fecha_conclusion = Column(TIMESTAMP)
+    permiso = Column(String(20))
+    id_owner = Column(String(20))
+

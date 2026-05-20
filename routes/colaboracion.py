@@ -189,3 +189,22 @@ def renombrar_proyecto(
         "nombreproyecto": proyecto.nombreproyecto,
         "fechaactualizacion": proyecto.fechaactualizacion.isoformat()
     }
+    
+    
+    
+@router.get("/session/{session_id}/permiso/{idusuario}")
+def obtener_permiso_sesion(session_id: str, idusuario: str, db: Session = Depends(get_db)):
+    sesion = db.query(SessionChat).filter(
+        SessionChat.session_id == session_id,
+        SessionChat.idusuario == idusuario
+    ).first()
+
+    if not sesion:
+        raise HTTPException(status_code=404, detail="Sesión no encontrada para este usuario")
+
+    return {
+        "session_id": session_id,
+        "idusuario": idusuario,
+        "permiso": sesion.permiso,  # "OWNER" o "COLAB"
+        "id_owner": sesion.id_owner
+    }
