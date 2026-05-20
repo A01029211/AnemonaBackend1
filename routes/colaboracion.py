@@ -89,10 +89,9 @@ async def eliminar_colaborador(
 ):
     try:
         registro = db.query(SessionChat).filter(
-            SessionChat.id_session == payload.id_session,
-            SessionChat.session_id == payload.session_id,
-            SessionChat.idusuario == payload.id_usuario
-        ).first()
+    SessionChat.session_id == payload.session_id,
+    SessionChat.idusuario == payload.id_usuario
+).first()
 
         if not registro:
             raise HTTPException(
@@ -154,15 +153,14 @@ async def eliminar_colaborador(
             )
 
         return {
-            "ok": True,
-            "mensaje": "Colaborador eliminado correctamente",
-            "correo_enviado": usuario.correo if usuario else None,
-            "eliminado": {
-                "id_session": payload.id_session,
-                "session_id": payload.session_id,
-                "id_usuario": payload.id_usuario
-            }
-        }
+    "ok": True,
+    "mensaje": "Colaborador eliminado correctamente",
+    "correo_enviado": usuario.correo if usuario else None,
+    "eliminado": {
+        "session_id": payload.session_id,
+        "id_usuario": payload.id_usuario
+    }
+}
 
     except HTTPException:
         raise

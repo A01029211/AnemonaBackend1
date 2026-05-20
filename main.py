@@ -11,8 +11,6 @@ from routes.email_route import router as email_router
 from routes.arquitectura import router as arquitectura
 from routes.word_export import router as word_router
 from routes.colaboracion import router as colaboracion_router
-from routes.colaborativo_route import router as colaborativo_router
-
 
 from dotenv import load_dotenv
 import os
@@ -47,8 +45,6 @@ app.include_router(
     prefix="/email",
     tags=["Email"]
 )
-
-app.include_router(arquitectura)
 
 @app.get("/test-db")
 def test_db():
