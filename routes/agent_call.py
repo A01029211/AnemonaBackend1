@@ -165,7 +165,6 @@ class HistoryResponse(BaseModel):
     user_id: str
     events: list
 
-
 @router.get("/sessions/{session_id}/history", response_model=HistoryResponse)
 async def get_session_history(session_id: str, user_id: str):
     """
@@ -173,39 +172,52 @@ async def get_session_history(session_id: str, user_id: str):
     """
 
     try:
+
+
         remote_app = agent_engines.get(AGENT_RESOURCE_NAME)
 
-        # Obtiene la sesión completa desde Vertex
+        # Obtener sesión
         session = await remote_app.async_get_session(
             user_id=user_id,
             session_id=session_id,
-            
         )
 
-       
+        # DEBUG RAW RESPONSE
+      
 
-        # Algunos SDKs regresan `events`
+        # Algunos SDKs regresan dict
         events = session.get("events", [])
+
+
 
         parsed_events = []
 
-        for event in events:
+        for idx, event in enumerate(events):
+
+            
 
             content = event.get("content", {})
             role = content.get("role", "")
             parts = content.get("parts", [])
 
+           
+
             parsed_parts = []
 
-            for part in parts:
+            for part_idx, part in enumerate(parts):
+
+        
 
                 if "text" in part:
+              
+
                     parsed_parts.append({
                         "type": "text",
                         "text": part["text"]
                     })
 
                 elif "function_call" in part:
+                  
                     parsed_parts.append({
                         "type": "tool_call",
                         "tool": part["function_call"].get("name"),
@@ -213,17 +225,24 @@ async def get_session_history(session_id: str, user_id: str):
                     })
 
                 elif "function_response" in part:
+                   
                     parsed_parts.append({
                         "type": "tool_response",
                         "tool": part["function_response"].get("name"),
                         "response": part["function_response"].get("response"),
                     })
 
-            parsed_events.append({
+            parsed_event = {
                 "author": role,
                 "parts": parsed_parts,
                 "timestamp": event.get("timestamp"),
-            })
+            }
+
+    
+
+            parsed_events.append(parsed_event)
+
+  
 
         return HistoryResponse(
             session_id=session_id,
@@ -232,4 +251,6 @@ async def get_session_history(session_id: str, user_id: str):
         )
 
     except Exception as e:
+        print("\nERROR EN GET HISTORY")
+        print(str(e))
         raise HTTPException(status_code=500, detail=str(e))
