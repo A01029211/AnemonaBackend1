@@ -86,6 +86,7 @@ class EliminarColaboradorPayload(BaseModel):
     id_session: int
     session_id: str
     id_usuario: str
+    nombre_proyecto: str | None = None  # ← agregar esto
 
 @router.post("/subir")
 async def subir_documento(payload: DocumentoPayload):

@@ -1,5 +1,3 @@
-
-
 import asyncio
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException
@@ -102,12 +100,63 @@ async def eliminar_colaborador(
                 detail="No se encontró un registro con ese id_session, session_id e id_usuario"
             )
 
+        # Buscar correo del usuario antes de eliminar
+        usuario = db.query(Usuario).filter(
+            Usuario.idusuario == payload.id_usuario
+        ).first()
+
         db.delete(registro)
         db.commit()
+
+        # Mandar correo si encontramos al usuario
+        if usuario and usuario.correo:
+            nombre = f"{usuario.nombre} {usuario.apellidopaterno}"
+            proyecto = payload.nombre_proyecto or "el proyecto"
+            html = f"""
+            <div style="font-family:'Segoe UI',Arial,sans-serif;padding:40px;background:#f0f2f5;">
+              <div style="max-width:600px;margin:0 auto;background:#fff;border-radius:10px;
+                          box-shadow:0 4px 20px rgba(0,0,0,0.10);overflow:hidden;">
+                <div style="background:#1a1a2e;padding:24px 36px;">
+                  <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/5/53/Logo_de_Banorte.svg/1280px-Logo_de_Banorte.svg.png"
+                       alt="Banorte" height="40"/>
+                </div>
+                <div style="background:#1a1a2e;padding:16px 36px;border-top:1px solid #2e2e4e;">
+                  <p style="margin:0;color:#fff;font-size:17px;font-weight:700;">Actualización de colaboración</p>
+                </div>
+                <div style="padding:32px 36px;">
+                  <p style="font-size:15px;color:#1a1a2e;font-weight:600;">
+                    Hola, <span style="color:#EB0029;">{nombre}</span>
+                  </p>
+                  <p style="font-size:14px;color:#555;line-height:1.65;">
+                    Te informamos que has sido <strong>eliminado como colaborador</strong> 
+                    del proyecto <strong>{proyecto}</strong>.
+                  </p>
+                  <p style="font-size:14px;color:#555;">
+                    Si crees que esto es un error, contacta al administrador del proyecto.
+                  </p>
+                </div>
+                <div style="padding:24px 36px;border-top:1px solid #e5e7eb;text-align:center;">
+                  <p style="margin:0;font-size:11px;color:#9ca3af;">
+                    Este mensaje fue generado automáticamente — por favor no respondas.
+                  </p>
+                  <p style="margin:6px 0 0;font-size:11px;color:#c0c0c0;">
+                    ©️ 2025 Grupo Financiero Banorte · Anemona SRS Assistant
+                  </p>
+                </div>
+              </div>
+            </div>
+            """
+            from routes.email_route import _send_smtp
+            _send_smtp(
+                to_email=usuario.correo,
+                subject=f"Fuiste eliminado de {proyecto}",
+                html=html
+            )
 
         return {
             "ok": True,
             "mensaje": "Colaborador eliminado correctamente",
+            "correo_enviado": usuario.correo if usuario else None,
             "eliminado": {
                 "id_session": payload.id_session,
                 "session_id": payload.session_id,
@@ -120,7 +169,6 @@ async def eliminar_colaborador(
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Error al eliminar colaborador: {str(e)}")
-    
     
 # Obtener todos los colaboradores de un proyecto
 @router.get("/{folio}/obtener-colaboradores")
