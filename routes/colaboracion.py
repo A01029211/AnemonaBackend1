@@ -18,6 +18,10 @@ async def new_colab(correo: str, folio: int, db: Session = Depends(get_db)):
         def buscar_y_crear():
             # Buscar sesión owner por folio
             session_owner = db.query(SessionChat).filter(SessionChat.folio == folio).first()
+
+            # Buscar nombre del proyecto para agregarselo al correo
+            proyecto_obj = db.query(Proyecto).filter(Proyecto.folio == folio).first()
+            nombre_proyecto = proyecto_obj.nombreproyecto if proyecto_obj else f"folio {folio}"
             print(f"[DEBUG] Folio recibido: {folio}")
             if session_owner:
                 print(f"[DEBUG] Session owner: {session_owner.__dict__}")
@@ -33,7 +37,7 @@ async def new_colab(correo: str, folio: int, db: Session = Depends(get_db)):
                 print(f"[DEBUG] No se encontró ningún usuario con correo={correo}")
 
             if not session_owner or not usuario:
-                return session_owner, usuario, None, False
+                return session_owner, usuario, None, False, nombre_proyecto
 
             # Verificar si ya existe sesión para este usuario en este folio
             session_existente = db.query(SessionChat).filter(
@@ -43,7 +47,7 @@ async def new_colab(correo: str, folio: int, db: Session = Depends(get_db)):
 
             if session_existente:
                 print(f"[DEBUG] Ya existe sesión para usuario {usuario.idusuario} en folio {folio}")
-                return session_owner, usuario, session_existente, True
+                return session_owner, usuario, session_existente, True, nombre_proyecto
 
             # Copiar la sesión owner cambiando solo idusuario y permiso
             nueva_session = SessionChat(
@@ -60,28 +64,62 @@ async def new_colab(correo: str, folio: int, db: Session = Depends(get_db)):
             db.commit()
             db.refresh(nueva_session)
             print(f"[DEBUG] Nueva session creada: {nueva_session.__dict__}")
-            return session_owner, usuario, nueva_session, False
+            return session_owner, usuario, nueva_session, False, nombre_proyecto
 
-        session_owner, usuario, result_session, ya_existia = await asyncio.to_thread(buscar_y_crear)
+        session_owner, usuario, result_session, ya_existia, nombre_proyecto = await asyncio.to_thread(buscar_y_crear)
 
         if not session_owner:
             raise HTTPException(status_code=404, detail=f"No se encontró sesión con folio {folio}")
         if not usuario:
             raise HTTPException(status_code=404, detail=f"No se encontró usuario con correo {correo}")
 
+        if not ya_existia and usuario and usuario.correo:
+            try:
+                nombre = f"{usuario.nombre} {usuario.apellidopaterno}"
+                from routes.email_route import _send_smtp
+                _send_smtp(
+                    to_email=usuario.correo,
+                    subject=f"Fuiste agregado a {nombre_proyecto}",
+                    html=f"""
+                    <div style="font-family:'Segoe UI',Arial,sans-serif;padding:40px;background:#f0f2f5;">
+                      <div style="max-width:600px;margin:0 auto;background:#fff;border-radius:10px;
+                                  box-shadow:0 4px 20px rgba(0,0,0,0.10);overflow:hidden;">
+                        <div style="background:#1a1a2e;padding:24px 36px;">
+                          <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/5/53/Logo_de_Banorte.svg/1280px-Logo_de_Banorte.svg.png" alt="Banorte" height="40"/>
+                        </div>
+                        <div style="background:#1a1a2e;padding:16px 36px;border-top:1px solid #2e2e4e;">
+                          <p style="margin:0;color:#fff;font-size:17px;font-weight:700;">Actualización de colaboración</p>
+                        </div>
+                        <div style="padding:32px 36px;">
+                          <p style="font-size:15px;color:#1a1a2e;font-weight:600;">Hola, <span style="color:#EB0029;">{nombre}</span></p>
+                          <p style="font-size:14px;color:#555;line-height:1.65;">
+                            Te informamos que has sido <strong>agregado como colaborador</strong> al proyecto <strong>{nombre_proyecto}</strong>.
+                          </p>
+                          <p style="font-size:14px;color:#555;">Si crees que esto es un error, contacta al administrador del proyecto.</p>
+                        </div>
+                        <div style="padding:24px 36px;border-top:1px solid #e5e7eb;text-align:center;">
+                          <p style="margin:0;font-size:11px;color:#9ca3af;">Este mensaje fue generado automáticamente — por favor no respondas.</p>
+                          <p style="margin:6px 0 0;font-size:11px;color:#c0c0c0;">©️ 2025 Grupo Financiero Banorte · Anemona SRS Assistant</p>
+                        </div>
+                      </div>
+                    </div>
+                    """
+                )
+                print(f"[DEBUG] Correo enviado a {usuario.correo}")
+            except Exception as e:
+                print(f"[DEBUG] Error al enviar correo: {e}")
+
         return {
             "ok": True,
             "ya_existia": ya_existia,
             "mensaje": "El colaborador ya tenía una sesión activa" if ya_existia else "Sesión de colaborador creada correctamente",
-            
         }
 
     except HTTPException:
         raise
     except Exception as e:
         await asyncio.to_thread(db.rollback)
-        raise HTTPException(status_code=500, detail=str(e))
-    
+        raise HTTPException(status_code=500, detail=str(e))   
 @router.delete("/eliminar-colaborador")
 async def eliminar_colaborador(
     payload: EliminarColaboradorPayload,
