@@ -1,7 +1,8 @@
 from typing import Optional
 from sqlalchemy import Boolean, Column, Integer, String, TIMESTAMP, Text
-from sqlalchemy import Column, Boolean, Integer, String, TIMESTAMP, Text, ForeignKey
+from sqlalchemy import Column, Boolean, Integer, String, TIMESTAMP, Text, ForeignKey, DateTime
 from sqlalchemy.sql import func
+from datetime import datetime
 from database import Base
 
 class Proyecto(Base):
@@ -89,3 +90,13 @@ class SessionChat(Base):
     permiso = Column(String(20))
     id_owner = Column(String(20))
 
+
+class ProyectoLock(Base):
+    __tablename__ = "project_lock"
+
+    id_lock = Column(Integer, primary_key=True, index=True)
+    folio = Column(Integer, ForeignKey("proyecto.folio", ondelete="CASCADE"), nullable=False)
+    idusuario = Column(String, ForeignKey("usuario.idusuario", ondelete="CASCADE"), nullable=False)
+    bloqueado_desde = Column(DateTime, default=datetime.utcnow)
+    ultima_actividad = Column(DateTime, default=datetime.utcnow)
+    activo = Column(Boolean, default=True)
