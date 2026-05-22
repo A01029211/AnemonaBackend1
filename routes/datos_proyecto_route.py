@@ -1,22 +1,78 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException, Body
+from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 from database import get_db
-from models import Departamento, Proyecto, Mensaje, SessionChat, Usuario, empleados_proyecto
+from models import Departamento, Proyecto, Mensaje, SessionChat, Usuario, empleados_proyecto, ProyectoLock
 from pydantic import BaseModel
 from typing import Optional, List
 from sqlalchemy import desc, func
 import requests
 import json
 from routes.firestore_srs import eliminar_documento_firestore
-from fastapi import APIRouter, HTTPException, Body
 import vertexai
 from vertexai import agent_engines
+from utils.auth import leer_token
 
 
 from routes.firestore_srs import Formulario
 
 router = APIRouter()
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
+
+
+#obtener usuario logueado
+def obtener_usuario_logueado(token: str, db: Session):
+    datos = leer_token(token)
+
+    if not datos:
+        raise HTTPException(status_code=401, detail="Token inválido o expirado")
+    
+    usuario = db.query(Usuario).filter(
+        Usuario.correo == datos["correo"]
+    ).first()
+
+    if not usuario:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    
+    return usuario
+
+
+def nombre_completo_usuario(usuario: Usuario):
+    if not usuario:
+        return "Usuario desconocido"
+    
+    partes = [
+        usuario.nombre,
+        usuario.apellidopaterno,
+        usuario.apellidomaterno
+    ]
+
+    nombre = " ".join([str(p) for p in partes if p])
+
+    if nombre:
+        return nombre
+    
+    return usuario.correo or f"Usuario {usuario.iduuario}"
+
+
+def validar_acceso_proyecto(db: Session, folio: int, idusuario: str):
+    acceso = db.query(SessionChat).filter(
+        SessionChat.folio == folio,
+        SessionChat.idusuario == idusuario,
+        func.upper(SessionChat.permiso).in_(["OWNER", "COLAB"])
+    ).first()
+
+    if not acceso:
+        raise HTTPException(status_code=403, detail="No tienes acceso a este proyecto")
+    
+    return acceso
+
+def obtener_lock_activo(db: Session, folio: int):
+    return db.query(ProyectoLock).filter(
+        ProyectoLock.folio == folio,
+        ProyectoLock.activo == True
+    ).first()
 
 # obtener proyectos
 @router.get("/proyectos")
@@ -160,6 +216,161 @@ def obtener_proyectos_recientes(idusuario: str, db: Session = Depends(get_db)):
         for proyecto, session in resultados
     ]
 
+
+@router.post("/proyectos/{folio}/lock")
+def bloquear_proyecto(
+    folio: int,
+    token: str = Depends(oauth2_scheme),
+    db: Session = Depends(get_db)
+):
+    usuario_logueado = obtener_usuario_logueado(token, db)
+    idusuario_logueado = str(usuario_logueado.idusuario)
+ 
+    proyecto = db.query(Proyecto).filter(Proyecto.folio == folio).first()
+    if not proyecto:
+        raise HTTPException(status_code=404, detail="El proyecto no existe.")
+ 
+    validar_acceso_proyecto(db=db, folio=folio, idusuario=idusuario_logueado)
+ 
+    ahora = datetime.utcnow()
+    tiempo_expiracion = ahora - timedelta(minutes=15)
+ 
+    lock_existente = obtener_lock_activo(db, folio)
+ 
+    if lock_existente:
+        if str(lock_existente.idusuario) == idusuario_logueado:
+            # Si el mismo usuario ya tiene el lock solo refresca la actividad
+            lock_existente.ultima_actividad = ahora
+            db.commit()
+            return {
+                "ok": True,
+                "message": "El proyecto ya esta abierto por este usuario",
+                "folio": folio,
+                "locked_by_me": True
+            }
+ 
+        if lock_existente.ultima_actividad < tiempo_expiracion:
+            # Si el lock expiró desactiva el viejo y crea uno nuevo
+            lock_existente.activo = False
+
+            nuevo_lock = ProyectoLock(
+                folio=folio,
+                idusuario=idusuario_logueado,
+                bloqueado_desde=ahora,
+                ultima_actividad=ahora,
+                activo=True
+            )
+
+            db.add(nuevo_lock)
+            db.commit()
+
+            return {
+                "ok": True,
+                "message": "El bloqueo anterior expiró. Proyecto abierto correctamente.",
+                "folio": folio,
+                "locked_by_me": True
+            }
+ 
+        # Si otro usuario activo tiene el lock devuelve 409 con su info
+        usuario_ocupando = db.query(Usuario).filter(
+            Usuario.idusuario == lock_existente.idusuario
+        ).first()
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "message": "Este proyecto está siendo utilizado por otro usuario.",
+                "locked_by": {
+                    "idusuario": lock_existente.idusuario,
+                    "nombre": nombre_completo_usuario(usuario_ocupando)
+                }
+            }
+        )
+ 
+    # Si no hay lock activo crea uno nuevo
+    nuevo_lock = ProyectoLock(
+        folio=folio,
+        idusuario=idusuario_logueado,
+        bloqueado_desde=ahora,
+        ultima_actividad=ahora,
+        activo=True
+    )
+
+    db.add(nuevo_lock)
+    db.commit()
+
+    return {
+        "ok": True,
+        "message": "Proyecto abierto correctamente.",
+        "folio": folio,
+        "locked_by_me": True
+    }
+
+
+@router.post("/proyectos/{folio}/heartbeat")
+def actualizar_actividad_proyecto(
+    folio: int,
+    token: str = Depends(oauth2_scheme),
+    db: Session = Depends(get_db)
+):
+    usuario_logueado = obtener_usuario_logueado(token, db)
+    idusuario_logueado = str(usuario_logueado.idusuario)
+ 
+    lock_existente = obtener_lock_activo(db, folio)
+ 
+    if not lock_existente:
+        raise HTTPException(
+            status_code=404,
+            detail="No existe un bloqueo activo para este proyecto."
+        )
+    
+    if str(lock_existente.idusuario) != idusuario_logueado:
+        raise HTTPException(
+            status_code=403,
+            detail="No puedes actualizar la actividad de un proyecto abierto por otro usuario."
+        )
+ 
+    lock_existente.ultima_actividad = datetime.utcnow()
+    db.commit()
+
+    return {
+        "ok": True,
+        "message": "Actividad actualizada correctamente.",
+        "folio": folio
+    }
+
+
+@router.delete("/proyectos/{folio}/lock")
+def liberar_proyecto(
+    folio: int,
+    token: str = Depends(oauth2_scheme),
+    db: Session = Depends(get_db)
+):
+    usuario_logueado = obtener_usuario_logueado(token, db)
+    idusuario_logueado = str(usuario_logueado.idusuario)
+ 
+    lock_existente = obtener_lock_activo(db, folio)
+ 
+    if not lock_existente:
+        return {
+            "ok": True,
+            "message": "No había bloqueo activo para este proyecto.",
+            "folio": folio
+        }
+ 
+    if str(lock_existente.idusuario) != idusuario_logueado:
+        raise HTTPException(
+            status_code=403,
+            detail="No puedes liberar un proyecto abierto por otro usuario."
+        )
+ 
+    lock_existente.activo = False
+    lock_existente.ultima_actividad = datetime.utcnow()
+    db.commit()
+    return {
+        "ok": True,
+        "message": "Proyecto liberado correctamente.",
+        "folio": folio
+    }
 
 
 #Eliminar proyecto según su folio
