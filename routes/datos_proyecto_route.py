@@ -117,6 +117,8 @@ def obtener_mis_proyectos(
                 "departamento": nombre_depto,
                 "session_id": session.session_id,
                 "id_firestore_document": session.id_firestore_document,
+                "id_owner": session.id_owner,
+                "permiso": session.permiso,
             }
             for proyecto, session in resultados
         ],
