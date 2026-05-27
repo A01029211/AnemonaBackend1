@@ -81,7 +81,12 @@ def obtener_proyectos(db: Session = Depends(get_db)):
     return proyectos
 
 @router.get("/usuarios/{idusuario}/proyectos")
-def obtener_mis_proyectos(idusuario: str, db: Session = Depends(get_db)):
+def obtener_mis_proyectos(
+    idusuario: str,
+    skip: int = 0,
+    limit: int = 18,
+    db: Session = Depends(get_db)
+):
     usuario = db.query(Usuario).filter(Usuario.idusuario == idusuario).first()
     if not usuario:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
@@ -93,25 +98,32 @@ def obtener_mis_proyectos(idusuario: str, db: Session = Depends(get_db)):
     )
     nombre_depto = depto.nombre if depto else "Sin área"
 
-    resultados = (
+    query = (
         db.query(Proyecto, SessionChat)
         .join(SessionChat, Proyecto.folio == SessionChat.folio)
         .filter(SessionChat.idusuario == idusuario)
         .order_by(Proyecto.fechacreacion.desc())
-        .all()
     )
 
-    return [
-        {
-            "folio": proyecto.folio,
-            "nombreproyecto": proyecto.nombreproyecto,
-            "fechacreacion": proyecto.fechacreacion.isoformat() if proyecto.fechacreacion else None,
-            "departamento": nombre_depto,
-            "session_id": session.session_id,
-            "id_firestore_document": session.id_firestore_document,
-        }
-        for proyecto, session in resultados
-    ]
+    total = query.count()
+    resultados = query.offset(skip).limit(limit).all()
+
+    return {
+        "proyectos": [
+            {
+                "folio": proyecto.folio,
+                "nombreproyecto": proyecto.nombreproyecto,
+                "fechacreacion": proyecto.fechacreacion.isoformat() if proyecto.fechacreacion else None,
+                "departamento": nombre_depto,
+                "session_id": session.session_id,
+                "id_firestore_document": session.id_firestore_document,
+            }
+            for proyecto, session in resultados
+        ],
+        "total": total,
+        "skip": skip,
+        "limit": limit,
+    }
 
 # obtener mensajes
 @router.get("/mensajes")
