@@ -66,3 +66,12 @@ async def crear_plantilla(plantilla_id: str, plantilla: Plantilla):
         "nombre": plantilla.nombre,
         "total_widgets": len(plantilla.widgets),
     }
+# ── 4. Eliminar una plantilla ───────────────────────────────────────────────
+@router.delete("/{plantilla_id}")
+async def eliminar_plantilla(plantilla_id: str):
+    ref = _db.collection(PLANTILLAS_COLLECTION).document(plantilla_id)
+    doc = ref.get()
+    if not doc.exists:
+        raise HTTPException(status_code=404, detail=f"Plantilla '{plantilla_id}' no encontrada.")
+    ref.delete()
+    return {"ok": True, "id": plantilla_id, "eliminada": True}
