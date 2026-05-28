@@ -11,6 +11,7 @@ from routes.email_route import router as email_router
 from routes.arquitectura import router as arquitectura
 from routes.word_export import router as word_router
 from routes.colaboracion import router as colaboracion_router
+from routes.plantillas import router as plantillas
 
 from dotenv import load_dotenv
 import os
@@ -35,6 +36,7 @@ app.include_router(firestore_router)
 app.include_router(widgets_router)
 app.include_router(arquitectura)
 app.include_router(word_router)
+app.include_router(plantillas)
 app.include_router(
     agent_call,
     prefix="/agent",
