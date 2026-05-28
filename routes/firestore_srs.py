@@ -80,6 +80,8 @@ class Formulario(BaseModel):
 class NuevoProyectoPayload(BaseModel):
     formulario: Formulario
     plantilla: List[Dict[str, Any]]
+    nombre_plantilla: str = "Documento" 
+
 
 
 class EliminarColaboradorPayload(BaseModel):
@@ -207,6 +209,8 @@ async def new_project(payload: NuevoProyectoPayload, db: Session = Depends(get_d
                 "descripcion_campos": w["descripcion_campos"],
                 "campos":             w["campos"],
             }
+        
+        nuevo_doc["nombre_plantilla"] = payload.nombre_plantilla
 
         # 3. Subir a Firestore
         async def crear_firestore():
