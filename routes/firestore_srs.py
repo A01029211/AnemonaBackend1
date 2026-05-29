@@ -196,7 +196,7 @@ async def new_project(payload: NuevoProyectoPayload, db: Session = Depends(get_d
                     if valor is not None:
                         widget["campos"][campo_plantilla] = valor
                 if formulario.departamentos_impactados:
-                    widget["campos"]["AREAS_IMPACTADAS"] = formulario.departamentos_impactados
+                    widget["campos"]["AREAS_IMPACTADASSSS"] = formulario.departamentos_impactados
                 break
 
         # 2. Construir el documento con posición como llave
