@@ -267,7 +267,7 @@ async def new_project(payload: NuevoProyectoPayload, db: Session = Depends(get_d
         documento["DATOS_GENERALES"] = datos_generales
 
         if formulario.departamentos_impactados:
-            documento["AREAS_IMPACTADASSSSSS"] = [
+            documento["Areas impactadas"] = [
                 {"AREA_NEGOCIO": area, "PROCESO_IMPACTO": ""}
                 for area in formulario.departamentos_impactados
             ]
