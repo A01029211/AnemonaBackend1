@@ -247,7 +247,7 @@ def bloquear_proyecto(
     validar_acceso_proyecto(db=db, folio=folio, idusuario=idusuario_logueado)
  
     ahora = datetime.utcnow()
-    tiempo_expiracion = ahora - timedelta(minutes=15)
+    tiempo_expiracion = ahora - timedelta(minutes=3)
  
     lock_existente = obtener_lock_activo(db, folio)
  
