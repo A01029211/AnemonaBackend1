@@ -62,3 +62,4 @@ uvicorn==0.41.0
 websockets==16.0
 playwright
 python-docx>=1.2.0
+matplotlib
