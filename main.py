@@ -60,5 +60,9 @@ def test_db():
 
 import uvicorn
 
+@app.on_event("shutdown")
+def shutdown_event():
+    engine.dispose()
+
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
